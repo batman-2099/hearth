@@ -1,0 +1,19 @@
+{
+  "homeAssistant": {
+    "url": "http://homeassistant.local:8123",
+    "token": "REPLACE_WITH_YOUR_HOME_ASSISTANT_LONG_LIVED_ACCESS_TOKEN",
+    "entities": [
+      "sensor.living_room_temperature",
+      "light.living_room"
+    ],
+    "actions": [
+      {
+        "name": "Toggle living room light",
+        "domain": "light",
+        "service": "toggle",
+        "entityId": "light.living_room"
+      }
+    ]
+  },
+  "refreshSeconds": 30
+}

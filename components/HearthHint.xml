@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="HearthHint" extends="Group">
+  <interface>
+    <field id="text" type="string" onChange="renderHint" />
+    <field id="color" type="color" onChange="renderHint" />
+    <field id="keyBackground" type="color" onChange="renderHint" />
+    <field id="fontSize" type="integer" value="22" onChange="renderHint" />
+    <field id="width" type="float" onChange="renderHint" />
+    <field id="height" type="float" onChange="renderHint" />
+    <field id="wrap" type="boolean" />
+    <field id="bottomAligned" type="boolean" />
+  </interface>
+  <script type="text/brightscript" uri="HearthHint.brs" />
+</component>

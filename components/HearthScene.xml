@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="HearthScene" extends="Scene">
+  <script type="text/brightscript" uri="pkg:/source/hearthModel.brs" />
+  <script type="text/brightscript" uri="pkg:/source/hearthTheme.brs" />
+  <script type="text/brightscript" uri="pkg:/source/hearthUi.brs" />
+  <script type="text/brightscript" uri="HearthScene.brs" />
+  <children>
+    <Poster id="wallpaper" width="1280" height="720" loadDisplayMode="scaleToFill" />
+    <Rectangle id="veil" width="1280" height="720" />
+    <Poster id="brandFrame" translation="[64,36]" width="48" height="40" uri="pkg:/images/hearth-frame.png" loadDisplayMode="scaleToFit" />
+    <Poster id="brandFlame" translation="[64,36]" width="48" height="40" uri="pkg:/images/hearth-flame.png" loadDisplayMode="scaleToFit" />
+    <Group id="toolbar" translation="[124,36]" />
+    <Label id="clock" translation="[1004,24]" width="212" height="58" horizAlign="right" />
+    <Label id="date" translation="[800,82]" width="416" height="32" horizAlign="right" />
+    <Label id="status" translation="[64,112]" width="1152" height="30" />
+    <HearthHome id="home" translation="[64,150]" />
+    <HearthControls id="controls" translation="[64,150]" visible="false" />
+    <HearthCameras id="cameras" translation="[64,150]" visible="false" />
+    <HearthSettings id="settings" translation="[64,140]" visible="false" />
+    <HearthHint id="hint" translation="[64,680]" width="920" height="96" bottomAligned="true" />
+    <Label id="connectionLabel" translation="[1004,642]" width="176" height="40" text="Home Assistant" vertAlign="center" />
+    <Poster id="connectionMark" translation="[1188,648]" width="28" height="28" loadDisplayMode="scaleToFit" />
+    <Rectangle id="photoBackdrop" width="1280" height="720" visible="false" />
+    <Poster id="photo" width="1280" height="720" loadDisplayMode="scaleToFit" visible="false" />
+    <Rectangle id="photoHintBackground" translation="[64,552]" width="1152" height="120" visible="false" />
+    <HearthHint id="photoHint" translation="[80,564]" width="1120" height="96" wrap="true" visible="false" />
+    <Video id="video" width="1280" height="720" visible="false" />
+    <Timer id="poll" repeat="true" duration="30" />
+    <Timer id="clockTimer" repeat="true" duration="30" />
+    <Timer id="cameraTimer" repeat="true" duration="5" />
+  </children>
+</component>

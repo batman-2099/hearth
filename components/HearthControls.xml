@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="HearthControls" extends="Group">
+  <interface>
+    <field id="data" type="assocarray" onChange="dataChanged" />
+    <field id="pendingId" type="string" onChange="render" />
+    <field id="selected" type="integer" value="0" />
+    <field id="activate" type="string" alwaysNotify="true" />
+    <field id="dim" type="assocarray" alwaysNotify="true" />
+    <field id="brightness" type="string" alwaysNotify="true" />
+    <field id="leave" type="boolean" alwaysNotify="true" />
+    <field id="hint" type="string" alwaysNotify="true" />
+    <field id="currentRoom" type="string" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/source/hearthModel.brs" />
+  <script type="text/brightscript" uri="pkg:/source/hearthTheme.brs" />
+  <script type="text/brightscript" uri="pkg:/source/hearthUi.brs" />
+  <script type="text/brightscript" uri="HearthControls.brs" />
+</component>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="HearthTask" extends="Task">
+    <interface>
+        <field id="request" type="assocarray" />
+        <field id="result" type="assocarray" alwaysNotify="true" />
+    </interface>
+    <script type="text/brightscript" uri="pkg:/source/hearthModel.brs" />
+    <script type="text/brightscript" uri="pkg:/source/haWebSocket.brs" />
+    <script type="text/brightscript" uri="pkg:/components/HearthTask.brs" />
+</component>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="HearthCameras" extends="Group">
+    <interface>
+        <field id="states" type="array" />
+        <field id="entityIds" type="array" />
+        <field id="connection" type="assocarray" />
+        <field id="config" type="assocarray" />
+        <field id="themeMode" type="string" value="dark" />
+        <field id="refreshTick" type="integer" value="0" />
+        <field id="selected" type="integer" value="0" />
+        <field id="hint" type="string" />
+        <field id="itemSelected" type="string" alwaysNotify="true" />
+        <field id="leave" type="boolean" alwaysNotify="true" />
+    </interface>
+    <script type="text/brightscript" uri="pkg:/source/hearthTheme.brs" />
+    <script type="text/brightscript" uri="pkg:/source/hearthModel.brs" />
+    <script type="text/brightscript" uri="pkg:/source/haWebSocket.brs" />
+    <script type="text/brightscript" uri="pkg:/components/HearthCameras.brs" />
+    <children>
+        <Group id="cameraTiles" />
+        <Label id="cameraEmpty" translation="[24,170]" width="1104" height="100" horizAlign="center" wrap="true" />
+    </children>
+</component>

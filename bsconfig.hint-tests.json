@@ -1,0 +1,16 @@
+{
+  "rootDir": ".",
+  "files": [
+    "manifest",
+    "images/**/*",
+    { "src": "components/HearthHint.brs", "dest": "components/HearthHint.brs" },
+    { "src": "scripts/hearthHint.test.brs", "dest": "components/hearthHint.test.brs" },
+    { "src": "scripts/HintTestScene.xml", "dest": "components/HintTestScene.xml" },
+    { "src": "scripts/hintTestMain.brs", "dest": "source/main.brs" }
+  ],
+  "outFile": "out/hint-tests.zip",
+  "stagingDir": "out/hint-tests-staging",
+  "createPackage": true,
+  "retainStagingDir": false,
+  "sourceMap": false
+}

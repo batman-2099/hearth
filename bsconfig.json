@@ -1,0 +1,18 @@
+{
+  "$schema": "https://raw.githubusercontent.com/rokucommunity/brighterscript/master/bsconfig.schema.json",
+  "rootDir": ".",
+  "files": [
+    "manifest",
+    "LICENSE.hearth",
+    "source/**/*.brs",
+    "components/**/*.xml",
+    "components/**/*.brs",
+    "images/**/*",
+    "config.json"
+  ],
+  "outFile": "out/ha-roku.zip",
+  "stagingDir": "out/staging",
+  "createPackage": true,
+  "retainStagingDir": false,
+  "sourceMap": false
+}

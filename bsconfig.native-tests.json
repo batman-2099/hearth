@@ -1,0 +1,16 @@
+{
+  "rootDir": ".",
+  "files": [
+    "manifest",
+    "images/**/*",
+    "source/hearthModel.brs",
+    "source/haWebSocket.brs",
+    { "src": "out/websocket-fixture.json", "dest": "websocket-fixture.json" },
+    { "src": "scripts/haWebSocket.test.brs", "dest": "source/main.brs" }
+  ],
+  "outFile": "out/native-tests.zip",
+  "stagingDir": "out/native-tests-staging",
+  "createPackage": true,
+  "retainStagingDir": false,
+  "sourceMap": false
+}

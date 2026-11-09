@@ -1,0 +1,8 @@
+title=Hearth for Roku
+major_version=2
+minor_version=0
+build_version=0
+ui_resolutions=hd
+supports_input_launch=0
+mm_icon_focus_fhd=pkg:/images/channel-icon-fhd.png
+mm_icon_focus_hd=pkg:/images/channel-icon-hd.png

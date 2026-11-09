@@ -1,0 +1,15 @@
+node_modules/
+out/
+.hallmark/
+config.json
+config.local.json
+.env
+.env.*
+*.zip
+*.pkg
+*.pem
+*.key
+*.p12
+*.pfx
+npm-debug.log*
+.DS_Store

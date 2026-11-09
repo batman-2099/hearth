@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="540" height="405" viewBox="0 0 540 405" role="img" aria-labelledby="title">
+  <title id="title">Hearth fireplace and flame</title>
+  <style>
+    /* Hallmark · scope: logo · theme: existing Hearth brand · signature: fireplace and flame */
+    /* Critique: a literal hearth replaces the generic house initial; no glow or decorative detail. */
+    :root { --background: #151719; --ink: #F4F3EF; --accent: #18BCF2; --wordmark: "DejaVu Sans", sans-serif; }
+    .background { fill: var(--background); }
+    .frame, .wordmark { fill: var(--ink); }
+    .flame { fill: var(--accent); }
+    .wordmark { font-family: var(--wordmark); font-size: 52px; font-weight: 700; }
+  </style>
+  <rect class="background" width="540" height="405" />
+  <rect class="frame" x="174" y="78" width="192" height="20" rx="5" />
+  <rect class="frame" x="184" y="94" width="16" height="132" rx="3" />
+  <rect class="frame" x="340" y="94" width="16" height="132" rx="3" />
+  <rect class="frame" x="168" y="226" width="204" height="16" rx="4" />
+  <path class="flame" transform="translate(-11.25 -4)" d="M 270 218 C 239 218 225 198 235 176 C 241 163 251 157 251 142 C 260 148 263 155 263 163 C 282 149 286 132 279 114 C 305 133 314 159 306 180 C 320 175 323 164 320 153 C 344 185 324 218 294 218 C 300 205 294 193 281 182 C 284 197 263 204 270 218 Z" />
+  <text class="wordmark" x="270" y="325" text-anchor="middle">Hearth</text>
+</svg>

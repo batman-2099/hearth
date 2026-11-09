@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="HearthSettings" extends="Group">
+  <interface>
+    <field id="preferences" type="assocarray" onChange="settingsInputsChanged" />
+    <field id="connection" type="assocarray" onChange="settingsConnectionChanged" />
+    <field id="states" type="array" onChange="settingsInputsChanged" />
+    <field id="areas" type="assocarray" onChange="settingsInputsChanged" />
+    <!-- Initial picker room; empty or unavailable rooms fall back to All rooms. -->
+    <field id="preferredRoom" type="string" value="" />
+    <field id="config" type="assocarray" onChange="settingsInputsChanged" />
+    <field id="themeMode" type="string" value="dark" onChange="settingsThemeChanged" />
+    <field id="preferencesChanged" type="assocarray" alwaysNotify="true" />
+    <field id="preferencesSaveResult" type="assocarray" alwaysNotify="true" onChange="settingsPreferencesSaveResult" />
+    <field id="connectionChanged" type="assocarray" alwaysNotify="true" />
+    <field id="connectionSaveResult" type="assocarray" alwaysNotify="true" onChange="settingsConnectionSaveResult" />
+    <field id="closed" type="boolean" alwaysNotify="true" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/source/hearthTheme.brs" />
+  <script type="text/brightscript" uri="pkg:/source/hearthModel.brs" />
+  <script type="text/brightscript" uri="pkg:/components/HearthSettings.brs" />
+  <children>
+    <Rectangle id="panel" width="1152" height="548" />
+    <Label id="heading" translation="[24,12]" width="760" height="44" text="Settings" />
+    <Group id="pickerSave" translation="[810,6]" visible="false">
+      <Rectangle id="saveBackground" width="294" height="52" />
+      <LabelList id="saveSelection" itemSize="[294,52]" numRows="1" textHorizAlign="center">
+        <ContentNode role="content">
+          <ContentNode title="Save selection" />
+        </ContentNode>
+      </LabelList>
+    </Group>
+    <LabelList id="settingsList" translation="[24,66]" itemSize="[1104,52]" numRows="7" clippingRect="[-24,-4,1152,368]" vertFocusAnimationStyle="floatingFocus" drawFocusFeedback="true" />
+    <Label id="pickerDetail" translation="[24,338]" width="1104" height="96" wrap="true" visible="false" />
+    <HearthHint id="hint" translation="[24,440]" width="1104" height="96" wrap="true" />
+  </children>
+</component>
