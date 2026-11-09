@@ -1,8 +1,12 @@
 # Hearth for Roku
 
-![Hearth logo: a blue flame inside a fireplace](images/channel-icon-hd.png)
+<img src="images/channel-icon-hd.png" alt="Hearth logo: a blue flame inside a fireplace" width="145" height="109">
 
-Monitor and control Home Assistant from your TV with a Roku remote. Hearth is a native BrightScript/SceneGraph application that connects directly to Home Assistant—no browser wrapper or companion server required.
+Home Assistant on your TV, controlled with your Roku remote.
+
+**[Get started](#getting-started)** | [Remote controls](#using-the-remote) | [Troubleshooting](#cameras-and-troubleshooting) | [Contributing](#support-and-contributing)
+
+Native BrightScript/SceneGraph. Direct Home Assistant connection. No browser wrapper or companion server.
 
 ## Features
 
