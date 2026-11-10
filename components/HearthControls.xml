@@ -2,6 +2,7 @@
 <component name="HearthControls" extends="Group">
   <interface>
     <field id="data" type="assocarray" onChange="dataChanged" />
+    <field id="shortcutsOnly" type="boolean" value="false" />
     <field id="pendingId" type="string" onChange="render" />
     <field id="selected" type="integer" value="0" />
     <field id="activate" type="string" alwaysNotify="true" />

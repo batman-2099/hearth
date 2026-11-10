@@ -233,7 +233,111 @@ sub Main()
     for each url in ["http://ha.local:8123/base", "http://ha..local", "http://ha.local/a@b", "https://ha.local?query"]
         AssertSettings((HearthSettingsConnectionError(url, "test-token") = "") = HearthConnectionValid({url: url, token: "test-token"}), "settings and shared connection policy agree")
     end for
+    m.top.states = [{entity_id: "climate.room", state: "heat", attributes: {friendly_name: "Thermostat"}}, {entity_id: "sensor.room", state: "20", attributes: {}}]
+    m.top.preferences = {controls: []}
+    m.top.preferredRoom = ""
+    settingsOpenPicker("controls")
+    AssertSettings(m.visibleEntities.Count() = 1 and m.visibleEntities[0].id = "climate.room", "thermostats are discoverable as controls without configured commands")
+    settingsPickerSelected(2)
+    settingsSaveSelection()
+    AssertSettings(m.top.preferencesChanged.controls[0] = "climate.room", "thermostat selection uses the normal explicit Save flow")
+    TestDeviceNameEditor()
+    TestScenePicker()
+    TestDisplayPreferences()
     print "HEARTH_SETTINGS_TESTS_PASSED"
+end sub
+
+sub TestScenePicker()
+    m.preferencesPending = false
+    m.top.hasFocus = function() as boolean
+        return false
+    end function
+    m.mode = "main"
+    m.top.config = {}
+    m.top.preferredRoom = ""
+    m.top.areas = {}
+    m.top.states = [{entity_id: "scene.test", state: "unknown", attributes: {}}, {entity_id: "script.test", state: "off", attributes: {}}, {entity_id: "light.test", state: "off", attributes: {}}]
+    m.top.preferences = {controls: ["light.test", "scene.missing"], cameras: ["camera.keep"]}
+    m.list.itemSelected = 3
+    settingsSelected()
+    AssertSettings(m.pickerKind = "scenes" and m.entities.Count() = 3 and m.picked[0] = "scene.missing", "Scenes opens its own picker including missing selections but excluding ordinary controls")
+    AssertSettings(m.pickerLimit = 47, "scene capacity reserves slots for existing controls")
+    m.picked = ["scene.test", "script.test"]
+    settingsSaveSelection()
+    AssertSettings(m.top.preferencesChanged.controls.Count() = 3 and HearthContains(m.top.preferencesChanged.controls, "light.test"), "saving scenes preserves unrelated controls")
+    AssertSettings(HearthContains(m.top.preferencesChanged.controls, "script.test") and not HearthContains(m.top.preferencesChanged.controls, "scene.missing"), "scene save replaces only shortcut selections")
+    AssertSettings(m.top.preferencesChanged.cameras[0] = "camera.keep", "scene save preserves camera selections")
+    m.top.preferencesSaveResult = {ok: true}
+    settingsPreferencesSaveResult()
+    m.top.preferencesChanged = invalid
+    settingsOpenPicker("scenes")
+    m.picked = []
+    onKeyEvent("back", true)
+    AssertSettings(m.top.preferencesChanged = invalid, "scene picker cancel does not save changes")
+    m.top.states = [{entity_id: "scene.one", state: "unknown", attributes: {friendly_name: "Evening"}}, {entity_id: "scene.two", state: "unknown", attributes: {friendly_name: "Evening"}}]
+    m.top.preferences = {controls: []}
+    settingsOpenPicker("scenes")
+    AssertSettings(m.entities[0].label <> m.entities[1].label, "same-name entities remain distinguishable even within one domain")
+    for each entity in m.entities
+        AssertSettings(Instr(1, entity.label, entity.id) > 0, "duplicate rows include their unique entity ID")
+    end for
+end sub
+
+sub TestDeviceNameEditor()
+    m.preferencesPending = false
+    m.top.preferencesChanged = invalid
+    m.top.preferences = {sensors: ["light.test"], controls: ["light.test", "scene.test"], cameras: ["camera.missing"], deviceNames: {"scene.test": "Evening"}}
+    m.top.config = {homeAssistant: {entityNames: {"light.test": "File lamp"}}}
+    m.top.states = [{entity_id: "light.test", state: "on", attributes: {friendly_name: "Original lamp"}}, {entity_id: "scene.test", state: "unknown", attributes: {}}]
+    m.top.scene = {}
+    m.top.getScene = function() as object
+        return m.scene
+    end function
+    _brs_.mockComponent("KeyboardDialog", {close: false, observeField: sub(field as string, callback as string)
+    end sub, unobserveField: sub(field as string)
+    end sub})
+    m.mode = "main"
+    m.list.itemSelected = 4
+    settingsSelected()
+    AssertSettings(m.mode = "names" and m.nameIds.Count() = 3 and m.nameIds[2] = "camera.missing", "editor deduplicates selected devices and retains missing devices for rename/reset")
+    m.list.itemSelected = 1
+    settingsSelected()
+    AssertSettings(m.dialog.text = "File lamp", "keyboard starts with the current displayed name")
+    m.dialog.text = "  Desk  "
+    m.dialog.buttonSelected = 0
+    settingsKeyboardSelected()
+    AssertSettings(m.preferencesPending and not m.dialog.close, "rename waits for persistence acknowledgment")
+    AssertSettings(m.top.preferencesChanged.deviceNames["light.test"] = "Desk" and m.top.preferencesChanged.deviceNames["scene.test"] = "Evening", "rename trims input and preserves other aliases")
+    AssertSettings(m.top.preferences.deviceNames["light.test"] = invalid and m.top.preferencesChanged.controls.Count() = 2, "pending rename leaves current names and control selections unchanged")
+    m.top.preferencesSaveResult = {ok: false, error: "Save failed."}
+    settingsPreferencesSaveResult()
+    AssertSettings(not m.dialog.close and m.dialog.text = "  Desk  " and m.dialog.message = "Save failed.", "failed rename retains draft and feedback for retry")
+    settingsKeyboardSelected()
+    m.top.preferences = m.top.preferencesChanged
+    m.top.config.deviceNames = m.top.preferences.deviceNames
+    m.top.preferencesSaveResult = {ok: true, error: ""}
+    settingsPreferencesSaveResult()
+    AssertSettings(m.dialog.close, "successful rename closes the editor")
+    m.top.visible = true
+    m.list.setFocus = sub(focus as boolean)
+    end sub
+    settingsDialogClosed()
+    AssertSettings(m.mode = "names" and m.list.content.GetChild(1).title = "Desk" and m.list.jumpToItem = 1, "save returns to renamed device in the list")
+    m.top.preferencesChanged = invalid
+    m.list.itemSelected = 1
+    settingsSelected()
+    m.dialog.text = String(65, "a")
+    m.dialog.buttonSelected = 0
+    settingsKeyboardSelected()
+    AssertSettings(not m.preferencesPending and m.top.preferencesChanged = invalid and not m.dialog.close, "oversized name stays editable without saving")
+    m.dialog.buttonSelected = 2
+    settingsKeyboardSelected()
+    AssertSettings(m.dialog.close and m.top.preferences.deviceNames["light.test"] = "Desk", "Cancel keeps the saved name")
+    settingsDialogClosed()
+    settingsSelected()
+    m.dialog.buttonSelected = 1
+    settingsKeyboardSelected()
+    AssertSettings(not m.top.preferencesChanged.deviceNames.DoesExist("light.test") and m.top.preferencesChanged.deviceNames["scene.test"] = "Evening", "Reset removes only this device's local name")
 end sub
 
 sub AssertSettings(condition as boolean, message as string)
@@ -246,3 +350,49 @@ end sub
 function SettingsTestUnfocused() as boolean
     return false
 end function
+
+sub TestDisplayPreferences()
+    defaults = HearthDefaultPreferences(invalid, invalid)
+    AssertSettings(defaults.density = "compact" and not defaults.sensorAlerts.enabled, "density stays compact and alerts require opt-in")
+    raw = ParseJson("{""density"":""comfortable"",""sensorAlerts"":{""enabled"":true,""batteryPercent"":25,""openDoors"":false,""temperatureUnit"":""°F"",""temperatureMin"":32,""temperatureMax"":86}}")
+    normalized = HearthNormalizePreferences(raw, defaults)
+    normalized = ParseJson(FormatJson(normalized))
+    AssertSettings(normalized.DoesExist("sensorAlerts") and normalized.sensorAlerts.DoesExist("batteryPercent") and normalized.sensorAlerts.DoesExist("temperatureMin"), "native JSON preserves camelCase preference keys")
+    restored = HearthNormalizePreferences(normalized, defaults)
+    AssertSettings(restored.density = "comfortable" and restored.sensorAlerts.batteryPercent = 25 and not restored.sensorAlerts.openDoors and restored.sensorAlerts.temperatureUnit = "°F", "density and alert options roundtrip")
+    sensor = {entity_id: "sensor.temperature", state: "0", attributes: {device_class: "temperature", unit_of_measurement: "°C"}}
+    AssertSettings(HearthSensorAlert(sensor, restored.sensorAlerts) = "", "temperature at lower limit is not an alert after unit conversion")
+    sensor.state = "-1"
+    AssertSettings(HearthSensorAlert(sensor, restored.sensorAlerts) = "Alert: Cold", "temperature below converted lower limit alerts")
+    sensor.state = "30"
+    AssertSettings(HearthSensorAlert(sensor, restored.sensorAlerts) = "", "temperature at upper limit is not an alert")
+    sensor.state = "31"
+    AssertSettings(HearthSensorAlert(sensor, restored.sensorAlerts) = "Alert: Hot", "temperature above converted upper limit alerts")
+    sensor.state = "31oops"
+    AssertSettings(HearthSensorAlert(sensor, restored.sensorAlerts) = "", "malformed sensor numbers do not alert")
+    sensor = {entity_id: "sensor.battery", state: "25", attributes: {device_class: "battery", unit_of_measurement: "%"}}
+    AssertSettings(HearthSensorAlert(sensor, restored.sensorAlerts) = "Alert: Low battery", "battery threshold is inclusive")
+    sensor.state = "26"
+    AssertSettings(HearthSensorAlert(sensor, restored.sensorAlerts) = "", "battery above threshold is normal")
+    sensor = {entity_id: "binary_sensor.door", state: "on", attributes: {device_class: "door"}}
+    AssertSettings(HearthSensorAlert(sensor, restored.sensorAlerts) = "", "door alerts honor opt-out")
+    restored.sensorAlerts.openDoors = true
+    AssertSettings(HearthSensorAlert(sensor, restored.sensorAlerts) = "Alert: Open", "open selected door can alert")
+    sensor.state = "off"
+    AssertSettings(HearthSensorAlert(sensor, restored.sensorAlerts) = "", "closed doors do not alert")
+    invalidConfig = HearthNormalizeSensorAlerts({"enabled": "true", "batteryPercent": "NaN", "temperatureMin": 40, "temperatureMax": 20})
+    AssertSettings(not invalidConfig.enabled and invalidConfig.batteryPercent = 20 and invalidConfig.temperatureMin = invalid and invalidConfig.temperatureMax = invalid, "normalization rejects invalid booleans numbers and inverted limits")
+    m.preferencesPending = false
+    m.top.preferences = restored
+    m.top.preferencesChanged = invalid
+    m.editField = "temperatureMin"
+    m.dialog = {text: "90", buttonSelected: 0, close: false}
+    settingsKeyboardSelected()
+    AssertSettings(not m.preferencesPending and not m.dialog.close and m.top.preferencesChanged = invalid, "editor rejects lower limit above upper limit")
+    m.dialog.text = "20F"
+    settingsKeyboardSelected()
+    AssertSettings(not m.preferencesPending, "editor rejects units and numeric suffixes")
+    m.dialog.text = ""
+    settingsKeyboardSelected()
+    AssertSettings(m.preferencesPending and m.top.preferencesChanged.sensorAlerts.temperatureMin = invalid, "blank temperature disables only that limit")
+end sub

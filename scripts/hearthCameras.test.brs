@@ -67,6 +67,15 @@ sub Main()
     m.top.states[0].state = "unavailable"
     UpdateCameraMetadata()
     AssertCamera(not tile.available and tile.loading.visible and Instr(1, tile.poster.audioGuideText, "Press OK") = 0, "unavailable camera does not promise playback")
+    m.top.config.deviceNames = {"camera.front": "Entry"}
+    UpdateCameraMetadata()
+    AssertCamera(tile.title.text = "Entry", "unavailable camera retains its local name")
+    m.top.states = []
+    UpdateCameraMetadata()
+    AssertCamera(tile.title.text = "Entry" and not tile.available, "missing camera retains local name without becoming available")
+    m.top.config.deviceNames = {}
+    UpdateCameraMetadata()
+    AssertCamera(tile.title.text = "camera.front", "reset missing camera name restores its entity ID")
     print "HEARTH_CAMERAS_TESTS_PASSED"
 end sub
 

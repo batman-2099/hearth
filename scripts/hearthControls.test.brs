@@ -74,8 +74,50 @@ sub Main()
     onKeyEvent("fastforward", true)
     CheckControls(m.room = "" and m.entries.Count() = 0, "empty Controls has no stale room")
     CheckControls(m.empty.visible and not m.tiles[0].node.visible and not onKeyEvent("play", true), "empty Controls clears tiles and leaves Play unhandled")
+    m.top.data.preferences.controls = ["climate.test"]
+    m.top.data.states = [{entity_id: "climate.test", state: "heat", attributes: {current_temperature: 21, temperature_unit: "°C"}}]
+    dataChanged()
+    CheckControls(Instr(1, m.tiles[0].value.text, "21") > 0 and not m.tiles[0].toggle.node.visible, "thermostat shows its reading without a misleading power toggle")
+    CheckControls(not onKeyEvent("play", true), "thermostat leaves Play available for error details")
+    onKeyEvent("OK", true)
+    CheckControls(m.top.activate = "climate.test", "thermostat OK opens controls through normal activation")
     TestControlsViewport()
+    TestShortcutTiles()
+    m.top.data.preferences.controls = ["scene.test", "script.test"]
+    dataChanged()
+    previousId = m.entries[m.top.selected].id
+    previousRow = m.firstRow
+    m.top.data.preferences.density = "comfortable"
+    dataChanged()
+    CheckControls(m.entries[m.top.selected].id = previousId and m.firstRow = previousRow, "density preserves shortcut identity and scrolling")
+    CheckControls(m.tiles[0].node.scale[0] = 0.825 and m.tiles[0].node.scale[1] = 0.825 and m.tiles[4].node.translation[1] = 188, "Scenes use undistorted comfortable tile dimensions")
+    m.top.data.preferences.density = "compact"
+    dataChanged()
+    CheckControls(m.tiles[0].node.scale[0] = 0.5, "Scenes restore compact density")
     print "HEARTH_CONTROLS_TESTS_PASSED"
+end sub
+
+sub TestShortcutTiles()
+    m.top.shortcutsOnly = true
+    m.top.data.preferences.controls = ["light.test", "scene.test", "script.test"]
+    m.top.data.states = [{entity_id: "scene.test", state: "unknown", attributes: {}}, {entity_id: "script.test", state: "off", attributes: {}}, {entity_id: "scene.unselected", state: "unknown", attributes: {}}]
+    m.top.data.areas = {"scene.test": "Kitchen", "script.test": "Bedroom"}
+    dataChanged()
+    CheckControls(m.entries.Count() = 2 and m.entries[0].id = "scene.test" and m.entries[1].id = "script.test", "shortcuts include only selected scenes and scripts across rooms")
+    CheckControls(m.rooms.Count() = 1 and not m.tiles[0].toggle.node.visible, "shortcuts share one page without room filtering or toggle imagery")
+    m.top.selected = 1
+    m.top.data.preferences.controls = ["script.test", "scene.test"]
+    dataChanged()
+    CheckControls(m.top.selected = 0 and m.entries[0].id = "script.test", "shortcut refresh preserves focused entity after reorder")
+    m.top.pendingId = "script.test"
+    m.top.activate = invalid
+    render()
+    onKeyEvent("OK", true)
+    CheckControls(m.top.activate = invalid and m.tiles[0].value.text = "Sending…", "pending shortcut shows progress and blocks duplicate OK")
+    m.top.pendingId = ""
+    m.top.data.preferences.controls = ["light.test"]
+    dataChanged()
+    CheckControls(m.empty.visible and not m.tiles[0].node.visible, "empty shortcuts offer setup without leaking other controls")
 end sub
 
 sub TestControlsViewport()

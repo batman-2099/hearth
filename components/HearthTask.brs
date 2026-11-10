@@ -48,9 +48,7 @@ sub HearthRunRequest()
         else
             action = request.action
             body = {entity_id: action.entityId}
-            if type(action.data) = "roAssociativeArray"
-                if action.data.DoesExist("brightness_pct") then body.brightness_pct = action.data.brightness_pct
-            end if
+            if type(action.data) = "roAssociativeArray" then body.Append(action.data)
             response = HearthHttp(connection, "/api/services/" + action.domain + "/" + action.service, FormatJson(body))
             if response.ok
                 result.message = "Action sent."

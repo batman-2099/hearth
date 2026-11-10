@@ -1,6 +1,6 @@
 sub Main()
     _brs_.mockFunction("HearthHttp", TaskHttp)
-    _brs_.mockFunction("Sleep")
+    _brs_.mockFunction("Sleep", TaskSleep)
     _brs_.mockFunction("HaCameraStream", TaskStream)
     m.streamCalls = 0
     m.streamResult = {ok: true, url: "http://fixture/live.m3u8", error: ""}
@@ -9,6 +9,7 @@ sub Main()
     m.templateFails = true
     m.templateCalls = 0
     m.serviceCalls = 0
+    m.requestEvents = []
     m.roomMap = {"light.one": "Kitchen"}
     m.httpStates = [{entity_id: "button.identify", state: "unknown", attributes: {}}]
     m.top = {request: {op: "refresh", connection: {url: "http://ha.local", token: "test"}, preferences: {}, states: [], areas: invalid, config: {}}}
@@ -89,10 +90,65 @@ sub Main()
     m.top.request.op = "refresh"
     HearthRunRequest()
     CheckTask(m.serviceCalls = before + 1 and m.top.result.ok, "refresh never replays retained action fields")
+    m.serviceFail = false
+    climate = {entity_id: "climate.hall", state: "heat", attributes: {supported_features: 11, temperature: 21, target_temp_low: 19, target_temp_high: 24, min_temp: 7, max_temp: 35, target_temp_step: 0.5, hvac_modes: ["off", "heat", "heat_cool"], fan_mode: "auto", fan_modes: ["auto", "low"]}}
+    m.httpStates = [climate]
+    m.top.request = {op: "action", connection: {url: "http://ha.local", token: "test"}, preferences: {controls: ["climate.hall"]}, states: [climate], areas: {}, config: {}}
+    cases = [
+        {mode: "heat", service: "set_temperature", data: {temperature: 21.5}}
+        {mode: "heat_cool", service: "set_temperature", data: {target_temp_low: 19.5, target_temp_high: 24}}
+        {mode: "heat", service: "set_hvac_mode", data: {hvac_mode: "heat_cool"}}
+        {mode: "heat", service: "set_fan_mode", data: {fan_mode: "low"}}
+    ]
+    for each fixture in cases
+        climate.state = fixture.mode
+        m.top.request.action = {entityId: "climate.hall", domain: "climate", service: fixture.service, data: fixture.data}
+        before = m.serviceCalls
+        m.requestEvents = []
+        HearthRunRequest()
+        CheckTask(m.top.result.ok and m.top.result.message = "Action sent." and m.top.result.statesFresh, "authorized climate action succeeds and refreshes")
+        CheckTask(m.serviceCalls = before + 1 and m.servicePath = "/api/services/climate/" + fixture.service, "climate action posts once to its actual service")
+        CheckTask(m.serviceBody.entity_id = "climate.hall" and m.serviceBody.Count() = fixture.data.Count() + 1, "climate payload contains only selected entity and authorized data")
+        for each key in fixture.data
+            if HearthIsNumber(fixture.data[key])
+                CheckTask(HearthIsNumber(m.serviceBody[key]), "climate temperature remains a JSON number")
+            else
+                CheckTask(HearthIsString(m.serviceBody[key]), "climate mode remains a JSON string")
+            end if
+            CheckTask(m.serviceBody[key] = fixture.data[key], "climate payload preserves every service value")
+        end for
+        CheckTask(m.requestEvents.Join("|") = m.servicePath + "|sleep:1000|/api/states", "climate action waits one second then refreshes without retries")
+    end for
+    m.serviceFail = true
+    m.top.request.action = {entityId: "climate.hall", domain: "climate", service: "set_temperature", data: {temperature: 22}}
+    before = m.serviceCalls
+    m.requestEvents = []
+    HearthRunRequest()
+    CheckTask(m.serviceCalls = before + 1 and not m.top.result.ok and m.top.result.message = "" and m.top.result.statesFresh, "failed climate action posts once and still refreshes")
+    CheckTask(m.requestEvents.Join("|") = "/api/services/climate/set_temperature|sleep:1000|/api/states", "failed climate action retains delay and never retries")
+    CheckTask(Instr(1, m.top.result.error, "may have reached Home Assistant") > 0, "failed climate action preserves ambiguous-result warning")
+    m.top.request.op = "refresh"
+    HearthRunRequest()
+    CheckTask(m.serviceCalls = before + 1 and m.top.result.ok, "refresh never replays failed climate action")
+    m.serviceFail = false
+    m.top.request.op = "action"
+    m.top.request.preferences = {controls: [], sensors: ["climate.hall"]}
+    before = m.serviceCalls
+    m.requestEvents = []
+    HearthRunRequest()
+    CheckTask(not m.top.result.ok and m.top.result.statesFresh and m.serviceCalls = before, "discovered climate on Home without Controls selection cannot POST")
+    CheckTask(m.requestEvents.Join("|") = "/api/states", "unselected climate only refreshes")
+    m.top.request.preferences = {controls: ["climate.hall"]}
+    m.top.request.action.data.entity_id = "climate.other"
+    m.requestEvents = []
+    HearthRunRequest()
+    CheckTask(not m.top.result.ok and m.top.result.statesFresh and m.serviceCalls = before, "extra climate target is rejected before POST")
+    CheckTask(m.requestEvents.Join("|") = "/api/states", "extra target only refreshes and never reaches transport")
     print "HEARTH_TASK_TESTS_PASSED"
 end sub
 
 function TaskHttp(connection as object, path as string, body = invalid as dynamic) as object
+    m.requestEvents.Push(path)
     if path = "/api/states"
         if m.statesFail then return {ok: false, data: invalid, error: "Timed out."}
         return {ok: true, data: m.httpStates, error: ""}
@@ -103,9 +159,15 @@ function TaskHttp(connection as object, path as string, body = invalid as dynami
         return {ok: true, data: m.roomMap, error: ""}
     end if
     m.serviceCalls = m.serviceCalls + 1
+    m.servicePath = path
+    m.serviceBody = ParseJson(body)
     if m.serviceFail then return {ok: false, data: invalid, error: "Timed out."}
     return {ok: true, data: [], error: ""}
 end function
+
+sub TaskSleep(milliseconds as integer)
+    m.requestEvents.Push("sleep:" + milliseconds.ToStr().Trim())
+end sub
 
 function TaskStream(connection as object, id as string) as object
     m.streamCalls = m.streamCalls + 1

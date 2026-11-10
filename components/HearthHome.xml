@@ -3,14 +3,19 @@
     <interface>
         <field id="states" type="array" onChange="homeDataChanged" />
         <field id="entityIds" type="array" onChange="homeDataChanged" />
+        <field id="controlIds" type="array" onChange="homeDataChanged" />
         <field id="config" type="assocarray" onChange="homeDataChanged" />
         <field id="areas" type="assocarray" onChange="homeDataChanged" />
+        <field id="density" type="string" value="compact" onChange="homeRender" />
+        <field id="sensorAlerts" type="assocarray" onChange="homeDataChanged" />
+        <field id="statesFresh" type="boolean" value="false" onChange="homeRender" />
         <field id="pendingId" type="string" onChange="homeRender" />
         <field id="hint" type="string" />
         <field id="currentRoom" type="string" />
         <field id="themeMode" type="string" value="dark" onChange="homeThemeChanged" />
         <field id="selected" type="integer" value="0" onChange="homeSelectionChanged" />
         <field id="itemSelected" type="string" alwaysNotify="true" />
+        <field id="brightness" type="string" alwaysNotify="true" />
         <field id="leave" type="boolean" alwaysNotify="true" />
     </interface>
     <script type="text/brightscript" uri="pkg:/source/hearthModel.brs" />
@@ -19,7 +24,7 @@
     <script type="text/brightscript" uri="pkg:/components/HearthHome.brs" />
     <children>
         <Group id="tiles" translation="[0,42]" />
-        <Label id="empty" translation="[24,170]" width="1104" height="100" wrap="true" horizAlign="center" vertAlign="center" text="Choose Home tiles in Settings to make this your Home." />
+        <Label id="empty" translation="[24,170]" width="1104" height="100" wrap="true" horizAlign="center" vertAlign="center" text="Choose Home tiles or Controls in Settings to make this your Home." />
         <Label id="room" translation="[0,0]" width="820" height="38" />
         <Label id="range" translation="[832,4]" width="320" height="28" horizAlign="right" />
     </children>

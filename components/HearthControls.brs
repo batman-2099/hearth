@@ -6,7 +6,7 @@ sub init()
     m.rooms = []
     canvas = m.top.createChild("Group")
     m.theme = HearthTheme("dark")
-    m.empty = HearthLabel(canvas, "Choose lights, switches, scenes and buttons in Settings > Controls.", 0, 140, 1152, 100, m.theme.text, m.theme.bodySize)
+    m.empty = HearthLabel(canvas, "Choose lights, thermostats, switches, scenes and buttons in Settings > Controls.", 0, 140, 1152, 100, m.theme.text, m.theme.bodySize)
     m.empty.wrap = true
     m.range = HearthLabel(canvas, "", 832, 4, 320, 28, m.theme.muted, m.theme.smallSize)
     m.range.horizAlign = "right"
@@ -16,16 +16,17 @@ sub init()
     ' Recycle one screen within the current room.
     for slot = 0 to 7
         node = canvas.createChild("Group")
-        node.translation = [(slot mod 4) * 288, 42 + Int(slot / 4) * 148]
-        border = HearthPanel(node, 0, 0, 272, 132, m.theme.rule)
-        body = HearthPanel(node, 3, 3, 266, 126, m.theme.surface)
-        title = HearthLabel(node, "", 16, 10, 240, 66, m.theme.text, m.theme.bodySize)
+        node.scale = [0.5, 0.5]
+        node.translation = [(slot mod 4) * 146, 42 + Int(slot / 4) * 87]
+        border = HearthPanel(node, 0, 0, 272, 160, m.theme.rule)
+        body = HearthPanel(node, 3, 3, 266, 154, m.theme.surface)
+        title = HearthLabel(node, "", 20, 12, 232, 84, m.theme.text, m.theme.compactTextSize)
         title.wrap = true
         title.maxLines = 2
-        value = HearthLabel(node, "", 16, 78, 240, 36, m.theme.muted, m.theme.bodySize)
-        toggle = HearthToggle(node, 172, 80)
-        track = HearthRectangle(node, 16, 120, 240, 4, m.theme.rule)
-        fill = HearthRectangle(node, 16, 120, 0, 4, m.theme.text)
+        value = HearthLabel(node, "", 20, 104, 232, 44, m.theme.muted, m.theme.valueSize)
+        toggle = HearthToggle(node, 168, 110)
+        track = HearthRectangle(node, 20, 152, 232, 4, m.theme.rule)
+        fill = HearthRectangle(node, 20, 152, 0, 4, m.theme.text)
         m.tiles.Push({node: node, border: border, body: body, title: title, value: value, toggle: toggle, track: track, fill: fill})
     end for
     m.top.observeField("focusedChild", "focusChanged")
@@ -37,16 +38,26 @@ sub dataChanged()
     previousId = ""
     if m.top.selected >= 0 and m.top.selected < m.entries.Count() then previousId = m.entries[m.top.selected].id
     m.theme = HearthTheme(data.themeMode)
+    ids = data.preferences.controls
+    m.empty.text = "Choose lights, thermostats, switches, scenes and buttons in Settings > Controls."
+    if m.top.shortcutsOnly = true
+        ids = []
+        for each id in data.preferences.controls
+            if HearthContains(["scene", "script"], HearthEntityDomain(id)) then ids.Push(id)
+        end for
+        m.empty.text = "Choose scenes or scripts in Settings > Scenes, then press Right and OK to save."
+    end if
     m.entries = []
     groups = {}
     rooms = []
-    for each id in data.preferences.controls
+    for each id in ids
         room = "Other"
         if data.areas <> invalid
             if HearthIsString(data.areas[id])
                 if data.areas[id].Trim() <> "" then room = data.areas[id].Trim()
             end if
         end if
+        if m.top.shortcutsOnly = true then room = "Scenes"
         if not groups.DoesExist(room)
             groups[room] = []
             if LCase(room) <> "other" then rooms.Push(room)
@@ -57,6 +68,8 @@ sub dataChanged()
         action = "No actions available"
         if actions.Count() = 1 then action = "[OK] " + actions[0].name
         if actions.Count() > 1 then action = "[OK] Choose action"
+        if HearthEntityDomain(id) = "climate" then action = "[OK] Climate controls"
+        if m.top.shortcutsOnly = true then action = "[OK] " + HearthStandardAction(id).name
         groups[room].Push({id: id, state: state, room: room, title: HearthEntityTitle(state, data.config), action: action})
     end for
     rooms.Sort("i")
@@ -91,6 +104,7 @@ sub render()
     m.range.visible = count > 8
     m.range.color = m.theme.muted
     m.roomLabel.text = m.room
+    if m.top.shortcutsOnly = true then m.roomLabel.text = "Scenes"
     m.top.currentRoom = m.room
     m.roomLabel.color = m.theme.text
     row = Int(m.top.selected / 4)
@@ -104,6 +118,14 @@ sub render()
     m.range.text = (m.firstRow * 4 + 1).ToStr() + "–" + last.ToStr() + " of " + count.ToStr()
     for slot = 0 to 7
         tile = m.tiles[slot]
+        tile.node.scale = [0.5, 0.5]
+        tile.node.translation = [(slot mod 4) * 146, 42 + Int(slot / 4) * 87]
+        if m.top.data <> invalid
+            if m.top.data.preferences.density = "comfortable"
+                tile.node.scale = [0.825, 0.825]
+                tile.node.translation = [(slot mod 4) * 242, 42 + Int(slot / 4) * 146]
+            end if
+        end if
         index = m.firstRow * 4 + slot
         tile.node.visible = index < count
         if index < count
@@ -121,11 +143,11 @@ sub render()
             if pending then value = "Sending…"
             tile.value.text = value
             tile.value.color = m.theme.text
-            tile.value.width = 240
+            tile.value.width = 232
             tile.toggle.node.visible = false
             if HearthIsToggle(entry.id) and not pending
                 HearthToggleState(tile.toggle, HearthText(entry.state.state))
-                if tile.toggle.node.visible then tile.value.width = 148
+                if tile.toggle.node.visible then tile.value.width = 140
             end if
             tile.track.visible = false
             tile.fill.visible = false
@@ -138,14 +160,12 @@ sub render()
                     tile.track.color = m.theme.rule
                     tile.fill.visible = percent > 0
                     tile.fill.color = m.theme.text
-                    tile.fill.width = 240 * percent / 100
+                    tile.fill.width = 232 * percent / 100
                 end if
             end if
             tile.value.font = m.theme.fontBold
             tile.value.font.size = m.theme.valueSize
-            if Len(tile.value.text) > 12 then tile.value.font.size = m.theme.headingSize
-            if Len(tile.value.text) > 18 then tile.value.font.size = m.theme.bodySize
-            if tile.toggle.node.visible and Len(tile.value.text) > 4 then tile.value.font.size = m.theme.bodySize
+            if Len(tile.value.text) > 12 then tile.value.font.size = m.theme.compactTextSize
             tile.value.height = 44
             spokenValue = tile.value.text
             if pending or domain = "scene" or domain = "script" or domain = "button" then spokenValue = HearthTileValue(entry.state)
@@ -159,7 +179,7 @@ function controlHint(entry as object) as string
     if entry.id = m.top.pendingId then return "Sending…"
     if not HearthStateAvailable(entry.state) then return "Device unavailable"
     hint = entry.action
-    if HearthLightSupportsBrightness(entry.state) then hint = hint + "     [Play] Brightness"
+    if HearthLightSupportsBrightness(entry.state) then hint = hint + "     [Play] Light controls"
     return hint
 end function
 

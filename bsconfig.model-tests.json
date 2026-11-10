@@ -1,0 +1,14 @@
+{
+  "rootDir": ".",
+  "files": [
+    "manifest",
+    "images/**/*",
+    "source/hearthModel.brs",
+    { "src": "scripts/hearthModel.test.brs", "dest": "source/main.brs" }
+  ],
+  "outFile": "out/model-tests.zip",
+  "stagingDir": "out/model-tests-staging",
+  "createPackage": true,
+  "retainStagingDir": false,
+  "sourceMap": false
+}

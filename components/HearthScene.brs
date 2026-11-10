@@ -38,10 +38,10 @@ sub init()
     m.dialogActions = []
     m.dialogMode = ""
     m.home = m.top.findNode("home")
-    m.controls = m.top.findNode("controls")
+    m.shortcuts = m.top.findNode("shortcuts")
     m.cameras = m.top.findNode("cameras")
     m.settings = m.top.findNode("settings")
-    m.pages = [m.home, m.controls, m.cameras]
+    m.pages = [m.home, m.shortcuts, m.cameras]
     m.status = m.top.findNode("status")
     m.connectionMark = m.top.findNode("connectionMark")
     m.hint = m.top.findNode("hint")
@@ -54,10 +54,9 @@ sub init()
     end for
     m.home.observeField("itemSelected", "homeActivated")
     m.home.observeField("hint", "updateHint")
-    m.controls.observeField("activate", "controlActivated")
-    m.controls.observeField("dim", "controlDimmed")
-    m.controls.observeField("hint", "updateHint")
-    m.controls.observeField("brightness", "controlBrightness")
+    m.home.observeField("brightness", "controlBrightness")
+    m.shortcuts.observeField("activate", "shortcutActivated")
+    m.shortcuts.observeField("hint", "updateHint")
     m.cameras.observeField("itemSelected", "cameraActivated")
     m.cameras.observeField("hint", "updateHint")
     m.settings.observeField("preferencesChanged", "preferencesChanged")
@@ -72,7 +71,7 @@ sub init()
     m.tabLabels = []
     m.tabMarkers = []
     m.theme = HearthTheme("dark")
-    names = ["Home", "Controls", "Cameras", "Settings"]
+    names = ["Home", "Scenes", "Cameras", "Settings"]
     for index = 0 to names.count() - 1
         face = HearthPanel(m.top.findNode("toolbar"), index * 146, 0, 138, 44, m.theme.surface)
         label = HearthLabel(m.top.findNode("toolbar"), names[index], index * 146, 5, 138, 36, m.theme.text, m.theme.bodySize)
@@ -109,6 +108,10 @@ function selectedStates(ids as object, byId as object) as object
 end function
 
 sub updateSurfaces()
+    m.config.deviceNames = m.preferences.deviceNames
+    m.home.config = m.config
+    m.cameras.config = m.config
+    m.settings.config = m.config
     mode = resolvedTheme()
     byId = {}
     for each state in m.states
@@ -141,11 +144,25 @@ sub updateSurfaces()
     m.status.color = m.theme.muted
     displayAreas = m.areas
     if type(displayAreas) <> "roAssociativeArray" then displayAreas = {}
-    m.home.entityIds = m.preferences.sensors
+    homeIds = []
+    seen = {}
+    for each ids in [m.preferences.sensors, m.preferences.controls]
+        for each id in ids
+            if not seen.DoesExist(id)
+                homeIds.Push(id)
+                seen[id] = true
+            end if
+        end for
+    end for
+    m.home.entityIds = homeIds
+    m.home.controlIds = m.preferences.controls
+    m.home.density = m.preferences.density
+    m.home.sensorAlerts = m.preferences.sensorAlerts
+    m.home.statesFresh = m.statesFresh
     m.home.areas = displayAreas
-    m.home.states = selectedStates(m.preferences.sensors, byId)
+    m.home.states = selectedStates(homeIds, byId)
     m.home.themeMode = mode
-    m.controls.data = {states: selectedStates(m.preferences.controls, byId), preferences: m.preferences, config: m.config, areas: displayAreas, themeMode: mode}
+    m.shortcuts.data = {states: selectedStates(m.preferences.controls, byId), preferences: m.preferences, config: m.config, areas: displayAreas, themeMode: mode}
     if FormatJson(m.cameras.connection) <> FormatJson(m.connection) then m.cameras.connection = m.connection
     if FormatJson(m.cameras.entityIds) <> FormatJson(m.preferences.cameras) then m.cameras.entityIds = m.preferences.cameras
     m.cameras.states = selectedStates(m.preferences.cameras, byId)
@@ -182,13 +199,31 @@ end sub
 
 sub updateToolbar()
     if m.theme = invalid then return
+    scenesVisible = false
+    for each id in m.preferences.controls
+        if HearthContains(["scene", "script"], HearthEntityDomain(id))
+            scenesVisible = true
+            exit for
+        end if
+    end for
+    visibleTabs = [true, scenesVisible, m.preferences.cameras.Count() > 0, true]
+    if not visibleTabs[m.page] then m.page = 0
+    if not visibleTabs[m.tabIndex] then m.tabIndex = 0
+    position = 0
     active = m.page
     if m.settingsOpen then active = m.pages.count()
     for index = 0 to m.tabs.count() - 1
+        shown = visibleTabs[index]
+        m.tabs[index].visible = shown
+        m.tabLabels[index].visible = shown
+        m.tabs[index].translation = [position * 146, 0]
+        m.tabLabels[index].translation = [position * 146, 5]
+        m.tabMarkers[index].translation = [position * 146 + 16, 46]
+        if shown then position = position + 1
         m.tabs[index].blendColor = m.theme.surface
         m.tabLabels[index].color = m.theme.muted
         m.tabMarkers[index].color = m.theme.focus
-        m.tabMarkers[index].visible = index = active
+        m.tabMarkers[index].visible = shown and index = active
         description = m.tabLabels[index].text + ". Page."
         if index = active
             m.tabLabels[index].color = m.theme.text
@@ -207,16 +242,13 @@ sub updateHint()
         m.hint.text = ""
     else if m.toolbarFocused
         m.hint.text = "[Left/Right] Page     [OK/Down] Open     [Back] Home/exit     [*] Settings"
-    else if m.page = 0
-        m.hint.text = m.home.hint
-    else if m.page = 1
-        m.hint.text = m.controls.hint
     else
-        m.hint.text = m.cameras.hint
+        m.hint.text = m.pages[m.page].hint
     end if
 end sub
 
 sub showPage()
+    updateToolbar()
     for index = 0 to m.pages.count() - 1
         m.pages[index].visible = not m.settingsOpen and index = m.page and not m.photo.visible and not m.video.visible
     end for
@@ -227,7 +259,6 @@ sub showPage()
     else
         m.pages[m.page].setFocus(true)
     end if
-    updateToolbar()
     updateHint()
 end sub
 
@@ -241,7 +272,6 @@ end sub
 sub openSettings()
     m.settings.preferredRoom = ""
     if m.page = 0 then m.settings.preferredRoom = m.home.currentRoom
-    if m.page = 1 then m.settings.preferredRoom = m.controls.currentRoom
     m.streamWanted = false
     m.settingsOpen = true
     m.settings.visible = true
@@ -317,6 +347,7 @@ end function
 sub updateStatus(message = "" as string)
     m.status.color = m.theme.muted
     connected = m.statesFresh = true and HearthConnectionValid(m.connection)
+    m.home.statesFresh = connected
     m.connectionMark.uri = "pkg:/images/connection-error.png"
     m.connectionMark.blendColor = m.theme.error
     m.connectionMark.audioGuideText = "Home Assistant disconnected."
@@ -381,7 +412,7 @@ sub startRequest(op as string, action = invalid as dynamic, entityId = "" as str
     m.requestGeneration = m.generation
     if op = "action"
         m.home.pendingId = action.entityId
-        m.controls.pendingId = action.entityId
+        m.shortcuts.pendingId = action.entityId
         updateStatus("Sending control…")
     end if
     if op = "stream"
@@ -399,7 +430,7 @@ sub received()
     result = m.task.result
     m.busy = false
     m.home.pendingId = ""
-    m.controls.pendingId = ""
+    m.shortcuts.pendingId = ""
     if m.requestGeneration <> m.generation
         m.refreshPending = false
         startRequest("refresh")
@@ -448,7 +479,7 @@ sub homeActivated()
         showMessage("Entity unavailable", "This entity is not currently reported by Home Assistant.")
         return
     end if
-    if HearthIsToggle(id)
+    if HearthIsToggle(id) or HearthSelectedControl(id, m.preferences)
         activateControl(id)
         return
     end if
@@ -472,14 +503,29 @@ sub showMessage(title as string, message as string)
     m.top.dialog = dialog
 end sub
 
-sub controlActivated()
-    activateControl(m.controls.activate)
+sub shortcutActivated()
+    if m.busy
+        updateStatus("Please wait for the current request.")
+        return
+    end if
+    id = m.shortcuts.activate
+    if not HearthContains(["scene", "script"], HearthEntityDomain(id)) then return
+    action = HearthStandardAction(id)
+    if not HearthSelectedControl(id, m.preferences) or not HearthActionAllowed(action, m.states, m.preferences, m.config)
+        showMessage("Shortcut unavailable", "Select this scene or script in Settings > Controls and refresh with Replay.")
+        return
+    end if
+    startRequest("action", action)
 end sub
 
 sub activateControl(id as string)
     state = HearthStateById(m.states, id)
     if not HearthStateAvailable(state)
         showMessage("Device unavailable", "Home Assistant does not currently report an available state. Try refreshing with Replay.")
+        return
+    end if
+    if HearthEntityDomain(id) = "climate" and HearthSelectedControl(id, m.preferences)
+        showClimateDialog(id)
         return
     end if
     actions = HearthControlActions(id, m.states, m.preferences, m.config)
@@ -511,48 +557,201 @@ sub controlBrightness()
         showStatusDetails()
         return
     end if
-    state = HearthStateById(m.states, m.controls.brightness)
-    if m.busy or not HearthStateAvailable(state) or not HearthLightSupportsBrightness(state) then return
-    m.brightnessId = state.entity_id
-    m.dialogMode = "brightness"
+    if m.busy then return
+    showLightDialog(m.home.brightness)
+end sub
+
+sub showLightDialog(id as string, key = "" as string)
+    if m.busy then return
+    state = HearthStateById(m.states, id)
+    if not HearthSelectedControl(id, m.preferences) or not HearthStateAvailable(state) then return
+    fields = HearthLightFields(state)
+    if fields.Count() = 0 then return
+    buttons = ["Close"]
+    choices = [invalid]
+    title = HearthEntityTitle(state, m.config)
+    message = "Light controls"
+    if key = ""
+        for each field in fields
+            buttons.Push(field.name + "…")
+            choices.Push({field: field.key})
+        end for
+    else
+        buttons = ["Back"]
+        choices = [{field: ""}]
+        for each field in fields
+            if field.key = key
+                title = field.name
+                message = HearthEntityTitle(state, m.config)
+                if field.kind = "number"
+                    current = HearthText(field.value)
+                    if current = "" then current = "Not reported"
+                    message = message + Chr(10) + "Current: " + current + " " + field.unit
+                    message = message + Chr(10) + "Range: " + HearthText(field.min) + "–" + HearthText(field.max) + " " + field.unit
+                    if HearthIsNumber(field.value)
+                        for each delta in [-1, 1]
+                            target = field.value + delta * field.step
+                            if target < field.min then target = field.min
+                            if target > field.max then target = field.max
+                            action = HearthLightAction(state, key, target)
+                            if action <> invalid and ((delta < 0 and target < field.value) or (delta > 0 and target > field.value))
+                                label = "Decrease to "
+                                if delta > 0 then label = "Increase to "
+                                buttons.Push(label + HearthText(target) + " " + field.unit)
+                                choices.Push({action: action})
+                            end if
+                        end for
+                    end if
+                end if
+                for index = 0 to field.presets.Count() - 1
+                    value = field.presets[index]
+                    action = HearthLightAction(state, key, value)
+                    if action <> invalid
+                        if field.kind = "color"
+                            label = field.names[index]
+                        else
+                            label = HearthText(value) + " " + field.unit
+                        end if
+                        buttons.Push(label)
+                        choices.Push({action: action})
+                    end if
+                end for
+            end if
+        end for
+    end if
+    m.lightId = id
+    m.lightChoices = choices
+    m.dialogMode = "light"
     dialog = CreateObject("roSGNode", "Dialog")
-    dialog.title = HearthEntityTitle(state, m.config)
-    dialog.message = "Adjust brightness by 10 percentage points."
-    dialog.buttons = ["Cancel", "Dim", "Brighten"]
+    dialog.title = title
+    dialog.message = message
+    dialog.buttons = buttons
     dialog.observeField("buttonSelected", "dialogSelected")
     dialog.observeField("wasClosed", "dialogClosed")
     m.top.dialog = dialog
 end sub
 
-sub controlDimmed()
-    change = m.controls.dim
-    state = HearthStateById(m.states, change.entityId)
-    if not HearthStateAvailable(state) or not HearthLightSupportsBrightness(state) then return
-    percent = 0
-    if HearthIsNumber(state.attributes.brightness) then percent = Int(state.attributes.brightness * 100 / 255 + 0.5)
-    if state.state = "off" then percent = 0
-    percent = percent + change.delta
-    if percent < 0 then percent = 0
-    if percent > 100 then percent = 100
-    startRequest("action", {entityId: change.entityId, domain: "light", service: "turn_on", data: {brightness_pct: percent}})
+sub showClimateDialog(id as string, key = "" as string)
+    if m.busy
+        updateStatus("Please wait for the current request.")
+        return
+    end if
+    state = HearthStateById(m.states, id)
+    if not HearthStateAvailable(state) or not HearthSelectedControl(id, m.preferences)
+        showMessage("Climate control unavailable", "Refresh with Replay and select this thermostat in Settings > Controls.")
+        return
+    end if
+    fields = HearthClimateFields(state)
+    attributes = HearthAttributes(state)
+    unit = HearthText(attributes.temperature_unit)
+    if unit = "" then unit = "°"
+    message = "Mode: " + HearthReadable(state.state)
+    if HearthIsNumber(attributes.current_temperature) then message = message + Chr(10) + "Current temperature: " + HearthText(attributes.current_temperature) + " " + unit
+    buttons = ["Close"]
+    choices = [invalid]
+    title = HearthEntityTitle(state, m.config)
+    if key = ""
+        for each field in fields
+            value = HearthText(field.value)
+            if value = "" then value = "Not reported"
+            if field.kind = "temperature" then value = value + " " + unit else value = HearthReadable(value)
+            buttons.Push(field.name + ": " + value + "…")
+            choices.Push({field: field.key})
+        end for
+        for each action in HearthControlActions(id, m.states, m.preferences, m.config)
+            buttons.Push(action.name)
+            choices.Push({action: action})
+        end for
+        if fields.Count() = 0 then message = message + Chr(10) + "No adjustable climate settings reported."
+    else
+        buttons = ["Back"]
+        choices = [{field: ""}]
+        for each field in fields
+            if field.key = key
+                title = field.name
+                value = HearthText(field.value)
+                if value = "" then value = "Not reported"
+                if field.kind <> "temperature" then value = HearthReadable(value)
+                message = HearthEntityTitle(state, m.config) + Chr(10) + "Current setting: " + value
+                if field.kind = "temperature"
+                    message = message + " " + unit + Chr(10) + "Step: " + HearthText(field.step) + " " + unit
+                    for each delta in [-1, 1]
+                        target = field.value + delta * field.step
+                        if target < field.min then target = field.min
+                        if target > field.max then target = field.max
+                        action = HearthClimateAction(state, key, target)
+                        if action <> invalid and ((delta < 0 and target < field.value) or (delta > 0 and target > field.value))
+                            label = "Decrease to "
+                            if delta > 0 then label = "Increase to "
+                            buttons.Push(label + HearthText(target) + " " + unit)
+                            choices.Push({action: action})
+                        end if
+                    end for
+                else
+                    for each option in field.options
+                        if option <> field.value
+                            action = HearthClimateAction(state, key, option)
+                            if action <> invalid
+                                buttons.Push(HearthReadable(option))
+                                choices.Push({action: action})
+                            end if
+                        end if
+                    end for
+                end if
+            end if
+        end for
+        if choices.Count() = 1 then message = message + Chr(10) + "No other settings available. Back returns."
+    end if
+    m.climateId = id
+    m.climateChoices = choices
+    m.dialogMode = "climate"
+    dialog = CreateObject("roSGNode", "Dialog")
+    dialog.title = title
+    dialog.message = message
+    dialog.buttons = buttons
+    dialog.observeField("buttonSelected", "dialogSelected")
+    dialog.observeField("wasClosed", "dialogClosed")
+    m.top.dialog = dialog
 end sub
 
 sub dialogSelected()
     selected = m.top.dialog.buttonSelected
     action = invalid
-    if m.dialogMode = "actions" and selected > 0 and selected <= m.dialogActions.count() then action = m.dialogActions[selected - 1]
-    if m.dialogMode = "brightness" and (selected = 1 or selected = 2)
-        delta = -10
-        if selected = 2 then delta = 10
-        m.controls.dim = {entityId: m.brightnessId, delta: delta}
+    if m.dialogMode = "climate" or m.dialogMode = "light"
+        choices = m.climateChoices
+        if m.dialogMode = "light" then choices = m.lightChoices
+        if selected >= 0 and selected < choices.Count()
+            choice = choices[selected]
+            if choice <> invalid
+                if choice.DoesExist("field")
+                    ' Replacing the dialog must not let the old close callback reset the new menu.
+                    m.top.dialog.unobserveField("wasClosed")
+                    m.top.dialog.close = true
+                    if m.dialogMode = "light"
+                        showLightDialog(m.lightId, choice.field)
+                    else
+                        showClimateDialog(m.climateId, choice.field)
+                    end if
+                    return
+                end if
+                action = choice.action
+            end if
+        end if
     end if
+    if m.dialogMode = "actions" and selected > 0 and selected <= m.dialogActions.count() then action = m.dialogActions[selected - 1]
     m.top.dialog.close = true
-    if action <> invalid then startRequest("action", action)
+    if action <> invalid and not m.busy
+        if HearthActionAllowed(action, m.states, m.preferences, m.config) then startRequest("action", action)
+    end if
 end sub
 
 sub dialogClosed()
     m.dialogMode = ""
     m.dialogActions = []
+    m.climateChoices = []
+    m.climateId = ""
+    m.lightChoices = []
+    m.lightId = ""
     if m.photo.visible
         m.photo.setFocus(true)
     else if m.video.visible
@@ -682,6 +881,9 @@ function onKeyEvent(key as string, press as boolean) as boolean
         nextTab = m.tabIndex
         if key = "left" and nextTab > 0 then nextTab = nextTab - 1
         if key = "right" and nextTab < m.tabs.count() - 1 then nextTab = nextTab + 1
+        while not m.tabs[nextTab].visible
+            if key = "left" then nextTab = nextTab - 1 else nextTab = nextTab + 1
+        end while
         m.tabIndex = nextTab
         if nextTab < m.pages.count() then m.page = nextTab
         m.streamWanted = false

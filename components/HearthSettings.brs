@@ -112,6 +112,10 @@ sub settingsRenderMain()
     m.list.numRows = 7
     m.list.clippingRect = [-24, -4, 1152, 368]
     p = settingsPreferences()
+    sceneCount = 0
+    for each id in p.controls
+        if HearthContains(["scene", "script"], HearthEntityDomain(id)) then sceneCount = sceneCount + 1
+    end for
     clock = "12-hour"
     if p.clock24 then clock = "24-hour"
     address = m.draftConnection.url
@@ -126,12 +130,32 @@ sub settingsRenderMain()
     if HearthIsString(m.connectionFeedback)
         if m.connectionFeedback <> "" then m.hint.text = m.connectionFeedback
     end if
-    settingsRows(["Home tiles: " + p.sensors.count().toStr() + "/30", "Controls: " + p.controls.count().toStr() + "/48", "Cameras: " + p.cameras.count().toStr() + "/9", "Theme: " + p.theme, "Wallpaper: " + p.wallpaper, "Clock: " + clock, "Refresh: " + p.refreshSeconds.toStr() + " seconds", "HA address: " + address, "Access token: " + tokenStatus, "Save connection" + suffix, "Cancel connection edits"], position)
+    alerts = p.sensorAlerts
+    alertStatus = "Disabled"
+    if alerts.enabled then alertStatus = "Enabled"
+    doors = "Off"
+    if alerts.openDoors then doors = "On"
+    low = HearthText(alerts.temperatureMin)
+    high = HearthText(alerts.temperatureMax)
+    if low = "" then low = "Off"
+    if high = "" then high = "Off"
+    settingsRows(["Home tiles: " + p.sensors.count().toStr() + "/30", "Controls: " + p.controls.count().toStr() + "/48", "Cameras: " + p.cameras.count().toStr() + "/9", "Scenes: " + sceneCount.toStr(), "Device names", "Theme: " + p.theme, "Wallpaper: " + p.wallpaper, "Clock: " + clock, "Refresh: " + p.refreshSeconds.toStr() + " seconds", "HA address: " + address, "Access token: " + tokenStatus, "Save connection" + suffix, "Cancel connection edits", "Tile density: " + p.density, "Sensor alerts: " + alertStatus, "Low battery at or below: " + HearthText(alerts.batteryPercent) + "%", "Open door/window alerts: " + doors, "Temperature alert unit: " + alerts.temperatureUnit, "Temperature below: " + low + " " + alerts.temperatureUnit, "Temperature above: " + high + " " + alerts.temperatureUnit], position)
 end sub
 
 sub settingsSelected()
     if m.preferencesPending = true then return
     index = m.list.itemSelected
+    if m.mode = "names"
+        if index = 0
+            settingsMain()
+        else if index <= m.nameIds.Count()
+            m.editNameId = m.nameIds[index - 1]
+            state = HearthStateById(m.top.states, m.editNameId)
+            if state = invalid then state = {entity_id: m.editNameId}
+            settingsKeyboard("deviceName", "Device name", HearthEntityTitle(state, m.top.config))
+        end if
+        return
+    end if
     if m.mode = "picker"
         settingsPickerSelected(index)
         return
@@ -141,35 +165,96 @@ sub settingsSelected()
             settingsMain()
         else
             p = settingsPreferences()
-            p[m.choiceField] = m.choiceValues[index - 1]
+            if HearthContains(["enabled", "openDoors", "temperatureUnit"], m.choiceField)
+                if m.choiceField = "temperatureUnit" and p.sensorAlerts.temperatureUnit <> m.choiceValues[index - 1]
+                    for each key in ["temperatureMin", "temperatureMax"]
+                        value = p.sensorAlerts[key]
+                        if value <> invalid
+                            if m.choiceValues[index - 1] = "°F" then value = value * 9 / 5 + 32 else value = (value - 32) * 5 / 9
+                            p.sensorAlerts[key] = value
+                        end if
+                    end for
+                end if
+                p.sensorAlerts[m.choiceField] = m.choiceValues[index - 1]
+            else
+                p[m.choiceField] = m.choiceValues[index - 1]
+            end if
             settingsSavePreferences(p)
         end if
         return
     end if
     m.mainPosition = index
-    if index < 3
-        kinds = ["sensors", "controls", "cameras"]
+    if index < 4
+        kinds = ["sensors", "controls", "cameras", "scenes"]
         settingsOpenPicker(kinds[index])
-    else if index = 3
-        settingsChoices("theme", "Theme", ["Dark", "Light", "Automatic (sun)"], ["dark", "light", "auto"])
     else if index = 4
-        settingsChoices("wallpaper", "Wallpaper", ["Slate", "Sand", "Mist", "None"], ["slate", "sand", "mist", "none"])
+        settingsRenderNames()
     else if index = 5
-        settingsChoices("clock24", "Clock", ["12-hour", "24-hour"], [false, true])
+        settingsChoices("theme", "Theme", ["Dark", "Light", "Automatic (sun)"], ["dark", "light", "auto"])
     else if index = 6
-        settingsKeyboard("refreshSeconds", "Refresh interval (5–3600 seconds)", settingsPreferences().refreshSeconds.toStr())
+        settingsChoices("wallpaper", "Wallpaper", ["Slate", "Sand", "Mist", "None"], ["slate", "sand", "mist", "none"])
     else if index = 7
-        settingsKeyboard("url", "Home Assistant address (http:// or https://)", m.draftConnection.url)
+        settingsChoices("clock24", "Clock", ["12-hour", "24-hour"], [false, true])
     else if index = 8
-        settingsKeyboard("token", "Home Assistant long-lived access token", "")
+        settingsKeyboard("refreshSeconds", "Refresh interval (5–3600 seconds)", settingsPreferences().refreshSeconds.toStr())
     else if index = 9
-        settingsSaveConnection()
+        settingsKeyboard("url", "Home Assistant address (http:// or https://)", m.draftConnection.url)
     else if index = 10
+        settingsKeyboard("token", "Home Assistant long-lived access token", "")
+    else if index = 11
+        settingsSaveConnection()
+    else if index = 12
         m.connectionDirty = false
         m.connectionFeedback = "Connection edits discarded."
         settingsConnectionChanged()
         m.hint.text = "Connection edits discarded."
+    else if index = 13
+        settingsChoices("density", "Tile density", ["Compact", "Comfortable"], ["compact", "comfortable"])
+    else if index = 14
+        settingsChoices("enabled", "Sensor alerts (selected Home sensors only)", ["Disabled", "Enabled"], [false, true])
+    else if index = 15
+        settingsKeyboard("batteryPercent", "Low battery threshold (0–100%)", HearthText(settingsPreferences().sensorAlerts.batteryPercent))
+    else if index = 16
+        settingsChoices("openDoors", "Open door/window alerts", ["Off", "On"], [false, true])
+    else if index = 17
+        settingsChoices("temperatureUnit", "Temperature alert unit", ["Celsius (°C)", "Fahrenheit (°F)"], ["°C", "°F"])
+    else if index = 18 or index = 19
+        p = settingsPreferences()
+        field = "temperatureMin"
+        label = "Alert below"
+        if index = 19
+            field = "temperatureMax"
+            label = "Alert above"
+        end if
+        settingsKeyboard(field, label + " (" + p.sensorAlerts.temperatureUnit + "; blank disables)", HearthText(p.sensorAlerts[field]))
     end if
+end sub
+
+sub settingsRenderNames(restoreId = "" as string)
+    m.mode = "names"
+    m.saveGroup.visible = false
+    m.detail.visible = true
+    m.list.numRows = 5
+    m.list.clippingRect = [-24, -4, 1152, 264]
+    m.heading.text = "Device names"
+    m.hint.text = "[OK] Rename     [Rew/Fwd] Page     [Back] Settings"
+    m.nameIds = []
+    rows = ["Back"]
+    position = 0
+    p = settingsPreferences()
+    for each kind in ["sensors", "controls", "cameras"]
+        for each id in p[kind]
+            if not HearthContains(m.nameIds, id)
+                m.nameIds.Push(id)
+                state = HearthStateById(m.top.states, id)
+                if state = invalid then state = {entity_id: id}
+                rows.Push(HearthEntityTitle(state, m.top.config))
+                if id = restoreId then position = rows.Count() - 1
+            end if
+        end for
+    end for
+    settingsRows(rows, position)
+    settingsPickerDetail()
 end sub
 
 sub settingsChoices(field as string, title as string, labels as object, values as object)
@@ -181,6 +266,7 @@ sub settingsChoices(field as string, title as string, labels as object, values a
     m.hint.text = "[OK] Save choice     [Back] Cancel"
     rows = ["Cancel"]
     current = settingsPreferences()[field]
+    if HearthContains(["enabled", "openDoors", "temperatureUnit"], field) then current = settingsPreferences().sensorAlerts[field]
     position = 0
     for i = 0 to labels.count() - 1
         prefix = "[ ] "
@@ -198,14 +284,20 @@ sub settingsOpenPicker(kind as string)
     m.mode = "picker"
     m.preferencesFeedback = ""
     m.pickerKind = kind
-    limits = {sensors: 30, controls: 48, cameras: 9}
+    limits = {sensors: 30, controls: 48, cameras: 9, scenes: 48}
     m.pickerLimit = limits[kind]
     p = settingsPreferences()
     m.picked = []
-    for each id in p[kind]
-        m.picked.push(id)
+    selection = p[kind]
+    if kind = "scenes" then selection = p.controls
+    for each id in selection
+        if kind <> "scenes" or HearthContains(["scene", "script"], HearthEntityDomain(id))
+            m.picked.push(id)
+        else
+            m.pickerLimit = m.pickerLimit - 1
+        end if
     end for
-    domains = {sensors: "|sensor|binary_sensor|climate|person|light|switch|input_boolean|", controls: "|light|switch|scene|script|button|input_boolean|", cameras: "|camera|"}
+    domains = {sensors: "|sensor|binary_sensor|climate|person|light|switch|input_boolean|", controls: "|light|switch|scene|script|button|input_boolean|climate|", cameras: "|camera|", scenes: "|scene|script|"}
     m.entities = []
     seen = {}
     states = m.top.states
@@ -215,9 +307,11 @@ sub settingsOpenPicker(kind as string)
     for each id in m.picked
         eligible.push(id)
     end for
-    if kind = "controls"
+    if kind = "controls" or kind = "scenes"
         for each action in HearthConfiguredActions(config)
-            if not HearthContains(eligible, action.entityId) then eligible.push(action.entityId)
+            if kind = "controls" or HearthContains(["scene", "script"], HearthEntityDomain(action.entityId))
+                if not HearthContains(eligible, action.entityId) then eligible.push(action.entityId)
+            end if
         end for
     end if
     if states = invalid then states = []
@@ -244,6 +338,15 @@ sub settingsOpenPicker(kind as string)
         end if
     end for
     m.entities.sortBy("sortKey")
+    labels = {}
+    for each entity in m.entities
+        key = LCase(entity.label)
+        if not labels.DoesExist(key) then labels[key] = 0
+        labels[key] = labels[key] + 1
+    end for
+    for each entity in m.entities
+        if labels[LCase(entity.label)] > 1 then entity.label = entity.label + " (" + entity.id + ")"
+    end for
     m.rooms = [""]
     for each entity in m.entities
         if not HearthContains(m.rooms, entity.room) then m.rooms.push(entity.room)
@@ -295,6 +398,25 @@ sub settingsPickerCount()
 end sub
 
 sub settingsPickerDetail()
+    if m.mode = "main"
+        help = ""
+        if m.list.itemFocused = 0 then help = "Choose readings and devices shown on Home."
+        if m.list.itemFocused = 1 then help = "Enable device actions on Home; includes scene selections."
+        if m.list.itemFocused = 3 then help = "Choose scene shortcuts; shares the 48 Controls slots."
+        if help <> "" and m.connectionFeedback = ""
+            m.hint.text = "[OK] Choose     [Back] Leave     " + help
+        else if m.connectionFeedback = ""
+            m.hint.text = "[OK] Edit / choose     [Back] Leave; unsaved connection edits are discarded"
+        end if
+        return
+    end if
+    if m.mode = "names"
+        index = m.list.itemFocused - 1
+        m.detail.text = "Choose a selected device to rename it on this Roku only."
+        if m.nameIds.Count() = 0 then m.detail.text = "First choose Home tiles, Controls, Scenes, or Cameras in Settings."
+        if index >= 0 and index < m.nameIds.Count() then m.detail.text = m.nameIds[index] + Chr(10) + "Home Assistant names are unchanged."
+        return
+    end if
     if m.mode <> "picker" then return
     index = m.list.itemFocused - 2
     if index >= 0 and index < m.visibleEntities.count()
@@ -306,12 +428,24 @@ sub settingsPickerDetail()
         m.detail.text = m.visibleEntities.count().toStr() + " matching devices. Filters do not change your selection."
         if m.visibleEntities.count() = 0 then m.detail.text = "No matching devices. Change Room or View above; saved selections are retained."
     end if
+    if m.pickerKind = "scenes" then m.detail.text = m.detail.text + Chr(10) + "Scenes and scripts share the 48-device Controls limit."
 end sub
 
 sub settingsSaveSelection()
     if m.mode <> "picker" or m.preferencesPending = true then return
     p = settingsPreferences()
-    p[m.pickerKind] = m.picked
+    if m.pickerKind = "scenes"
+        retained = []
+        for each id in p.controls
+            if not HearthContains(["scene", "script"], HearthEntityDomain(id)) then retained.Push(id)
+        end for
+        for each id in m.picked
+            retained.Push(id)
+        end for
+        p.controls = retained
+    else
+        p[m.pickerKind] = m.picked
+    end if
     settingsSavePreferences(p)
 end sub
 
@@ -362,6 +496,10 @@ sub settingsKeyboard(field as string, title as string, value as string)
         dialog.keyboard.textEditBox.secureMode = true
         dialog.message = "Replace token. Text remains hidden. Save connection to apply."
     end if
+    if field = "deviceName"
+        dialog.buttons = ["Save name", "Reset name", "Cancel"]
+        dialog.message = m.editNameId + Chr(10) + "Up to 64 characters. Reset or clear to restore the default name."
+    end if
     dialog.text = value
     m.editField = field
     m.dialog = dialog
@@ -372,8 +510,47 @@ end sub
 
 sub settingsKeyboardSelected()
     if m.preferencesPending = true then return
+    if m.editField = "deviceName"
+        if m.dialog.buttonSelected = 0 or m.dialog.buttonSelected = 1
+            value = m.dialog.text.Trim()
+            if m.dialog.buttonSelected = 1 then value = ""
+            if value <> "" and not HearthDeviceNameValid(value)
+                m.dialog.message = "Use 1–64 characters without line breaks, or clear the name to reset it."
+                return
+            end if
+            p = settingsPreferences()
+            if value = "" then p.deviceNames.Delete(m.editNameId) else p.deviceNames[m.editNameId] = value
+            settingsSavePreferences(p)
+        else
+            m.dialog.close = true
+        end if
+        return
+    end if
     if m.dialog.buttonSelected = 0
         value = m.dialog.text.trim()
+        if HearthContains(["batteryPercent", "temperatureMin", "temperatureMax"], m.editField)
+            p = settingsPreferences()
+            number = HearthAlertNumber(value)
+            if number = invalid and (value <> "" or m.editField = "batteryPercent")
+                m.dialog.message = "Enter a number (no units), or clear a temperature limit to disable it."
+                return
+            end if
+            if m.editField = "batteryPercent"
+                if number < 0 or number > 100
+                    m.dialog.message = "Enter a battery percentage from 0 to 100."
+                    return
+                end if
+            end if
+            p.sensorAlerts[m.editField] = number
+            if p.sensorAlerts.temperatureMin <> invalid and p.sensorAlerts.temperatureMax <> invalid
+                if p.sensorAlerts.temperatureMin > p.sensorAlerts.temperatureMax
+                    m.dialog.message = "Lower temperature limit must not exceed the upper limit."
+                    return
+                end if
+            end if
+            settingsSavePreferences(p)
+            return
+        end if
         if m.editField = "refreshSeconds"
             valid = CreateObject("roRegex", "^[0-9]+$", "")
             if not valid.isMatch(value) or Val(value) < 5 or Val(value) > 3600
@@ -381,7 +558,7 @@ sub settingsKeyboardSelected()
                 return
             end if
             p = settingsPreferences()
-            p.refreshSeconds = Int(Val(value))
+            p["refreshSeconds"] = Int(Val(value))
             settingsSavePreferences(p)
             return
         else
@@ -401,7 +578,7 @@ sub settingsDialogClosed()
         m.dialog = invalid
     end if
     if m.top.visible
-        settingsRenderMain()
+        if m.mode = "names" then settingsRenderNames(m.editNameId) else settingsRenderMain()
         m.list.setFocus(true)
     end if
 end sub
@@ -453,7 +630,7 @@ sub settingsPreferencesSaveResult()
     m.preferencesPending = false
     if result.ok = true
         m.preferencesFeedback = ""
-        if m.dialog <> invalid and m.editField = "refreshSeconds"
+        if m.dialog <> invalid and HearthContains(["refreshSeconds", "deviceName", "batteryPercent", "temperatureMin", "temperatureMax"], m.editField)
             m.dialog.close = true
         else
             settingsMain()

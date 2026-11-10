@@ -14,7 +14,7 @@
     <Label id="date" translation="[800,82]" width="416" height="32" horizAlign="right" />
     <Label id="status" translation="[64,112]" width="1152" height="30" />
     <HearthHome id="home" translation="[64,150]" />
-    <HearthControls id="controls" translation="[64,150]" visible="false" />
+    <HearthControls id="shortcuts" translation="[64,150]" visible="false" shortcutsOnly="true" />
     <HearthCameras id="cameras" translation="[64,150]" visible="false" />
     <HearthSettings id="settings" translation="[64,140]" visible="false" />
     <HearthHint id="hint" translation="[64,680]" width="920" height="96" bottomAligned="true" />

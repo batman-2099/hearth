@@ -5,7 +5,7 @@ const root = path.resolve(__dirname, '..');
 // The protocol check uses real roByteArray APIs and runs on Roku, not this interpreter.
 for (const [sources, test, marker] of [
   [['source/hearthModel.brs'], 'scripts/hearthModel.test.brs', 'HEARTH_MODEL_TESTS_PASSED'],
-  [['source/hearthModel.brs', 'source/hearthTheme.brs', 'components/HearthHome.brs'], 'scripts/hearthHome.test.brs', 'HEARTH_HOME_TESTS_PASSED'],
+  [['source/hearthModel.brs', 'source/hearthTheme.brs', 'source/hearthUi.brs', 'components/HearthHome.brs'], 'scripts/hearthHome.test.brs', 'HEARTH_HOME_TESTS_PASSED'],
   [['source/hearthModel.brs', 'components/HearthSettings.brs'], 'scripts/hearthSettings.test.brs', 'HEARTH_SETTINGS_TESTS_PASSED'],
   [['source/hearthModel.brs', 'components/HearthScene.brs'], 'scripts/hearthScene.test.brs', 'HEARTH_SCENE_TESTS_PASSED'],
   [['source/hearthModel.brs', 'source/hearthTheme.brs', 'source/hearthUi.brs', 'components/HearthControls.brs'], 'scripts/hearthControls.test.brs', 'HEARTH_CONTROLS_TESTS_PASSED'],

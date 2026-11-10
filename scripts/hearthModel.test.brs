@@ -1,4 +1,6 @@
 sub Main()
+    boxed = {temperature: 70}
+    AssertTrue(HearthText(boxed.temperature) = "70", "native boxed integer temperatures remain visible")
     states = [
         {entity_id: "sensor.temperature", state: "-2.5", attributes: {friendly_name: "Temperature", unit_of_measurement: "C"}}
         {entity_id: "sensor.battery", state: "80", attributes: {unit_of_measurement: "%"}}
@@ -48,6 +50,8 @@ sub Main()
     AssertTrue(saved.sensors.Count() = 1 and saved.sensors[0] = "sensor.temperature", "saved weather sensor selections discarded")
     AssertTrue(saved.controls.Count() = 1 and saved.controls[0] = "light.room" and saved.cameras.Count() = 1 and saved.cameras[0] = "camera.main", "remaining saved entity selections preserved")
     AssertTrue(saved.theme = "light" and not saved.clock24 and saved.wallpaper = "sand" and saved.refreshSeconds = 60, "remaining saved preferences preserved")
+    roundTrip = HearthNormalizePreferences(ParseJson(FormatJson(saved)), defaults)
+    AssertTrue(roundTrip.refreshSeconds = 60, "refresh interval survives registry JSON round trip")
     for each wallpaper in ["slate", "sand", "mist", "none"]
         appearance = HearthNormalizePreferences({wallpaper: wallpaper}, defaults)
         AssertTrue(appearance.wallpaper = wallpaper, "selected wallpaper survives normalization")
@@ -111,8 +115,6 @@ sub Main()
     titles = [{title: "Temperature"}, {title: "Temperature"}]
     HearthDisambiguateTitles(titles, ids, invalid)
     AssertTrue(titles[0].title = "Temperature / sensor.a" and titles[1].title = "Temperature / sensor.b", "missing rooms fall back to device identities")
-    AssertTrue(HearthTileAction("light.room", false, false) = "Device unavailable", "unavailable does not promise a toggle")
-    AssertTrue(HearthTileAction("light.room", true, true) = "Sending…", "pending replaces action prompt")
     AssertTrue(HearthGridMove(3, 9, 4, "right") = 3, "compact grid does not wrap right")
     AssertTrue(HearthGridMove(4, 9, 4, "left") = 4, "compact grid does not wrap left")
     AssertTrue(HearthGridMove(7, 9, 4, "down") = 8, "compact grid clamps down to partial last row")
@@ -221,7 +223,298 @@ sub Main()
     AssertTrue(HearthUrlOrigin("http://HA.local:00080/base?token=value") = "http://ha.local", "origin helper ignores path and query and canonicalizes port")
     AssertTrue(not HearthConnectionValid({url: "http://ha.local/base?token=value", token: "test-token"}), "origin query support does not permit saved connection queries")
 
+    TestClimateModel()
+    TestClimatePresets()
+    TestLightModel()
+    TestDeviceNames()
     print "HEARTH_MODEL_TESTS_PASSED"
+end sub
+
+sub TestDeviceNames()
+    state = {entity_id: "light.test", state: "on", attributes: {friendly_name: "Original name"}}
+    raw = {controls: ["light.test"], deviceNames: {"light.test": "  Desk  ", "bad/id": "Invalid", "sensor.empty": " ", "sensor.number": 4, "sensor.lines": "Bad" + Chr(10) + "name"}}
+    prefs = HearthNormalizePreferences(raw, invalid)
+    AssertTrue(prefs.deviceNames.Count() = 1 and prefs.deviceNames["light.test"] = "Desk", "name normalization trims aliases and rejects invalid IDs, types and control characters")
+    config = {homeAssistant: {entityNames: {"light.test": "File name"}}, deviceNames: prefs.deviceNames}
+    AssertTrue(HearthEntityTitle(state, config) = "Desk", "Roku name takes precedence over file and HA names")
+    restored = HearthNormalizePreferences(ParseJson(FormatJson(prefs)), invalid)
+    AssertTrue(restored.deviceNames["light.test"] = "Desk", "local names survive preference serialization")
+    restored.deviceNames.Delete("light.test")
+    AssertTrue(prefs.deviceNames["light.test"] = "Desk", "editing a normalized draft cannot change saved names")
+    config.deviceNames = restored.deviceNames
+    AssertTrue(HearthEntityTitle(state, config) = "File name", "reset reveals configured name")
+    config.homeAssistant.entityNames = {}
+    AssertTrue(HearthEntityTitle(state, config) = "Original name", "reset without configured name reveals Home Assistant name")
+    AssertTrue(HearthDeviceNameValid(String(64, "a")) and not HearthDeviceNameValid(String(65, "a")), "name length boundary is enforced")
+    AssertTrue(HearthDeviceNameValid("Lámpara") and not HearthDeviceNameValid("Bad" + Chr(9) + "name"), "Unicode names work without allowing control characters")
+    invalidNames = HearthNormalizePreferences({deviceNames: []}, invalid)
+    AssertTrue(invalidNames.deviceNames.Count() = 0, "malformed saved name map is safely ignored")
+    AssertTrue(not HearthActionAllowed(HearthStandardAction("light.test"), [state], {controls: [], deviceNames: {"light.test": "Desk"}}, {}), "naming a device never authorizes control")
+end sub
+
+sub TestLightModel()
+    light = {entity_id: "light.test", state: "on", attributes: {supported_color_modes: ["color_temp", "hs"], brightness: 128, color_temp_kelvin: 4000, min_color_temp_kelvin: 2000, max_color_temp_kelvin: 6500}}
+    selected = {controls: [light.entity_id]}
+    unselected = {controls: [], sensors: [light.entity_id]}
+    fields = HearthLightFields(light)
+    AssertTrue(fields.Count() = 3 and fields[0].key = "brightness_pct" and fields[1].key = "color_temp_kelvin" and fields[2].key = "hs_color", "light exposes only reported brightness, Kelvin and native color controls")
+    AssertTrue(fields[0].step = 10 and fields[0].presets.Count() = 4 and fields[1].step = 250, "brightness steps and presets coexist with Kelvin steps")
+    for each value in [2000, 4000, 6500]
+        action = HearthLightAction(light, "color_temp_kelvin", value)
+        AssertTrue(action.service = "turn_on" and action.data.color_temp_kelvin = value, "Kelvin action retains native service key and value")
+        AssertTrue(HearthActionAllowed(action, [light], selected, {}), "reported Kelvin endpoints authorized")
+    end for
+    configured = {homeAssistant: {actions: [{entityId: light.entity_id, domain: "light", service: "turn_on"}]}}
+    AssertTrue(not HearthActionAllowed(action, [light], unselected, configured), "Home display and configured service do not authorize parameterized light writes")
+    for each value in [1999, 6501, 3000.5, "4000", true, invalid]
+        AssertTrue(HearthLightAction(light, "color_temp_kelvin", value) = invalid, "invalid Kelvin temperature refused by builder")
+        action.data = {color_temp_kelvin: value}
+        AssertTrue(not HearthActionAllowed(action, [light], selected, configured), "forged Kelvin temperature cannot bypass boundary checks")
+    end for
+    for each data in [{color_temp_kelvin: 4000, entity_id: "light.other"}, {color_temp_kelvin: 4000, brightness_pct: 50}, {transition: 2}, {color_name: "red"}, {color_temp: 250}, {hs_color: [0]}, {hs_color: [0, 100, 1]}, {hs_color: [-1, 50]}, {hs_color: [361, 50]}, {hs_color: [30, 101]}, {hs_color: ["30", 50]}, {hs_color: "red"}, {rgb_color: [255, 0, 0]}]
+        action.data = data
+        AssertTrue(not HearthActionAllowed(action, [light], selected, configured), "forged, mixed, unsupported or malformed light payload refused")
+    end for
+    action = HearthLightAction(light, "hs_color", [30, 100])
+    AssertTrue(HearthActionAllowed(action, [light], selected, {}), "native HS preset authorized")
+    action.target = {entity_id: "light.other"}
+    AssertTrue(not HearthActionAllowed(action, [light], selected, {}), "top-level light retargeting refused")
+    action.Delete("target")
+    action.domain = "switch"
+    AssertTrue(not HearthActionAllowed(action, [light], selected, {}), "light domain substitution refused")
+    action.domain = "light"
+    action.service = "toggle"
+    AssertTrue(not HearthActionAllowed(action, [light], selected, {}), "color payload cannot accompany toggle")
+    action.service = "turn_on"
+    light.attributes.supported_color_modes = ["color_temp"]
+    AssertTrue(not HearthActionAllowed(action, [light], selected, {}), "removed color capability rejects an already-built action")
+    action = HearthLightAction(light, "color_temp_kelvin", 6500)
+    light.attributes.max_color_temp_kelvin = 5000
+    AssertTrue(not HearthActionAllowed(action, [light], selected, {}), "changed temperature bounds reject stale light choice")
+    light.state = "unavailable"
+    AssertTrue(HearthLightFields(light).Count() = 0 and not HearthActionAllowed(action, [light], selected, {}), "unavailable lights expose and authorize no controls")
+    light.state = "off"
+    AssertTrue(HearthLightFields(light)[0].value = 0, "off light steps begin at zero rather than stored brightness")
+    light.attributes = {supported_color_modes: ["onoff"], brightness: 120, min_color_temp_kelvin: 2000, max_color_temp_kelvin: 6500}
+    AssertTrue(HearthLightFields(light).Count() = 0 and not HearthLightSupportsBrightness(light), "explicit onoff mode overrides stale brightness and temperature attributes")
+    light.attributes = {supported_color_modes: ["color_temp"]}
+    AssertTrue(HearthLightFields(light).Count() = 1, "temperature controls require reported bounds")
+    light.attributes = {supported_color_modes: ["color_temp"], min_mireds: 153, max_mireds: 500, color_temp: 250}
+    fields = HearthLightFields(light)
+    AssertTrue(fields.Count() = 2 and fields[1].key = "color_temp" and fields[1].step = 25, "legacy mired range remains native and bounded")
+    for each value in [153, 250, 500]
+        AssertTrue(HearthActionAllowed(HearthLightAction(light, "color_temp", value), [light], selected, {}), "legacy mired endpoints authorized")
+    end for
+    AssertTrue(HearthLightAction(light, "color_temp", 152) = invalid and HearthLightAction(light, "color_temp", 501) = invalid, "mired bounds enforced")
+    light.attributes.min_color_temp_kelvin = "2000"
+    AssertTrue(HearthLightFields(light).Count() = 1, "malformed partial modern range cannot silently fall back to legacy limits")
+    light.attributes = {supported_features: 2, min_mireds: 153, max_mireds: 500}
+    AssertTrue(HearthLightFields(light).Count() = 2, "legacy temperature feature grants reported mired and implied brightness controls")
+    for each mode in ["hs", "rgb", "rgbw", "rgbww", "xy"]
+        light.attributes = {supported_color_modes: [mode]}
+        fields = HearthLightFields(light)
+        AssertTrue(fields.Count() = 2 and fields[1].key = mode + "_color", "color presets use explicitly supported native color mode")
+        for each preset in fields[1].presets
+            AssertTrue(HearthActionAllowed(HearthLightAction(light, fields[1].key, preset), [light], selected, {}), "each advertised color preset passes boundary authorization")
+        end for
+        AssertTrue(HearthLightAction(light, fields[1].key, [999, 0, 0]) = invalid, "oversized native color channels refused")
+    end for
+    light.attributes = {supported_color_modes: ["rgb"]}
+    AssertTrue(HearthLightAction(light, "rgb_color", [255, 0.5, 0]) = invalid, "RGB channels require integers")
+    light.attributes = {supported_color_modes: ["xy"]}
+    AssertTrue(HearthLightAction(light, "xy_color", [1.01, 0.2]) = invalid, "XY channel bounds enforced")
+    AssertTrue(HearthLightFields(invalid).Count() = 0 and HearthLightAction(light, {}, 50) = invalid, "missing state and malformed key rejected")
+    light.entity_id = "switch.test"
+    AssertTrue(HearthLightFields(light).Count() = 0, "non-light attributes cannot grant light controls")
+end sub
+
+sub TestClimatePresets()
+    climate = {entity_id: "climate.test", state: "heat", attributes: {supported_features: 16, preset_mode: "none", preset_modes: ["none", "eco", "comfort"]}}
+    selected = {controls: [climate.entity_id]}
+    fields = HearthClimateFields(climate)
+    AssertTrue(fields.Count() = 1 and fields[0].key = "preset_mode" and fields[0].value = "none", "bit16 and reported options expose climate presets")
+    for each mode in climate.attributes.preset_modes
+        action = HearthClimateAction(climate, "preset_mode", mode)
+        AssertTrue(action.service = "set_preset_mode" and action.data.Count() = 1 and action.data.preset_mode = mode, "climate preset uses dedicated service and exact reported string")
+        AssertTrue(HearthActionAllowed(action, [climate], selected, {}), "selected climate preset authorized")
+    end for
+    configured = {homeAssistant: {actions: [{entityId: climate.entity_id, domain: "climate", service: "set_preset_mode"}]}}
+    AssertTrue(not HearthActionAllowed(action, [climate], {controls: [], sensors: [climate.entity_id]}, configured), "climate presets require explicit Controls selection")
+    for each value in ["away", 1, true, invalid]
+        AssertTrue(HearthClimateAction(climate, "preset_mode", value) = invalid, "unsupported climate presets rejected")
+        action.data = {preset_mode: value}
+        AssertTrue(not HearthActionAllowed(action, [climate], selected, configured), "forged climate preset rejected at boundary")
+    end for
+    action = HearthClimateAction(climate, "preset_mode", "eco")
+    action.data.entity_id = "climate.other"
+    AssertTrue(not HearthActionAllowed(action, [climate], selected, configured), "preset payload cannot retarget another thermostat")
+    action.data.Delete("entity_id")
+    action.service = "set_fan_mode"
+    AssertTrue(not HearthActionAllowed(action, [climate], selected, {}), "preset payload cannot substitute fan service")
+    action.service = "set_preset_mode"
+    climate.attributes.preset_modes = ["none"]
+    AssertTrue(not HearthActionAllowed(action, [climate], selected, {}), "removed preset rejects stale action")
+    for each options in [[], ["eco", 1], ["eco", ""], "eco", invalid]
+        climate.attributes.preset_modes = options
+        AssertTrue(HearthClimateFields(climate).Count() = 0, "malformed preset lists expose no choices")
+    end for
+    climate.attributes.preset_modes = ["eco"]
+    climate.attributes.supported_features = 0
+    AssertTrue(HearthClimateFields(climate).Count() = 0 and not HearthActionAllowed(action, [climate], selected, {}), "preset list without bit16 grants no control")
+    climate.attributes.supported_features = 16
+    climate.state = "unavailable"
+    AssertTrue(not HearthActionAllowed(action, [climate], selected, {}), "unavailable thermostat cannot accept preset")
+end sub
+
+sub TestClimateModel()
+    climate = {entity_id: "climate.room", state: "heat", attributes: {
+        supported_features: 9, temperature: 20.5, current_temperature: 19.25
+        min_temp: 7, max_temp: 30, target_temp_step: 0.5
+        hvac_modes: ["off", "heat", "cool", "heat_cool", "auto", "dry", "fan_only"]
+        fan_mode: "auto", fan_modes: ["auto", "low", "high"]
+    }}
+    states = [climate]
+    selected = {controls: [climate.entity_id]}
+    unselected = {controls: [], sensors: [climate.entity_id]}
+    fields = HearthClimateFields(climate)
+    AssertTrue(fields.Count() = 3, "single target, HVAC and supported fan controls exposed")
+    AssertTrue(fields[0].kind = "temperature" and fields[0].value = 20.5 and fields[0].step = 0.5, "Celsius target retains raw half steps")
+    AssertTrue(fields[0].min = 7 and fields[0].max = 30, "reported limits retained")
+    AssertTrue(fields[1].kind = "choice" and fields[1].value = "heat", "HVAC descriptor reports current state")
+    AssertTrue(fields[2].key = "fan_mode" and fields[2].value = "auto", "fan descriptor retains current mode")
+    action = HearthClimateAction(climate, "temperature", 21)
+    AssertTrue(action.domain = "climate" and action.service = "set_temperature" and action.entityId = climate.entity_id, "temperature service target")
+    AssertTrue(action.data.Count() = 1 and action.data.temperature = 21, "single target payload only")
+    AssertTrue(HearthActionAllowed(action, states, selected, {}), "selected climate target authorized")
+    AssertTrue(not HearthActionAllowed(action, states, unselected, {}), "Home climate selection does not authorize changes")
+    AssertTrue(not HearthActionAllowed(action, states, HearthDefaultPreferences({}, states), {}), "climate discovery does not authorize changes")
+    configured = {homeAssistant: {actions: [{domain: "climate", service: "set_temperature", entityId: climate.entity_id}]}}
+    AssertTrue(not HearthActionAllowed(action, states, unselected, configured), "configured service cannot grant parameterized climate writes")
+    AssertTrue(HearthActionAllowed(configured.homeAssistant.actions[0], states, unselected, configured), "legacy configured no-data action preserved")
+    AssertTrue(HearthControlActions(climate.entity_id, states, selected, {}).Count() = 0, "climate does not gain implicit toggle or cycling action")
+    for each value in [7, 30, 21.5]
+        AssertTrue(HearthActionAllowed(HearthClimateAction(climate, "temperature", value), states, selected, {}), "temperature within reported limits")
+    end for
+    for each value in [6.5, 30.5, "21", true, invalid]
+        AssertTrue(HearthClimateAction(climate, "temperature", value) = invalid, "invalid temperature rejected before sending")
+        action.data = {temperature: value}
+        AssertTrue(not HearthActionAllowed(action, states, selected, {}), "forged invalid temperature refused")
+    end for
+    for each data in [{temperature: 21, hvac_mode: "heat"}, {temperature: 21, entity_id: "climate.other"}, {temperature: 21, target: {entity_id: "climate.other"}}, {temperature: 21, unexpected: 1}, {brightness_pct: 50}, [], "21"]
+        action.data = data
+        AssertTrue(not HearthActionAllowed(action, states, selected, configured), "unknown or malformed climate payload refused despite allowlist")
+    end for
+    action.data = {temperature: 21}
+    action.domain = "light"
+    AssertTrue(not HearthActionAllowed(action, states, selected, {}), "climate cannot substitute another domain")
+    action.domain = "climate"
+    action.target = {entity_id: "climate.other"}
+    AssertTrue(not HearthActionAllowed(action, states, selected, {}), "top-level target override refused")
+    action.Delete("target")
+    action.entityId = "light.room"
+    AssertTrue(not HearthActionAllowed(action, [{entity_id: "light.room", state: "on", attributes: climate.attributes}], {controls: ["light.room"]}, {}), "climate service cannot target non-climate entity")
+    AssertTrue(HearthClimateFields({entity_id: "sensor.fake", state: "heat", attributes: climate.attributes}).Count() = 0, "climate attributes do not grant non-climate controls")
+    for each mode in climate.attributes.hvac_modes
+        action = HearthClimateAction(climate, "hvac_mode", mode)
+        AssertTrue(action.service = "set_hvac_mode" and action.data.hvac_mode = mode, "reported HVAC mode maps to explicit service")
+        AssertTrue(HearthActionAllowed(action, states, selected, {}), "reported HVAC mode authorized")
+    end for
+    AssertTrue(HearthClimateAction(climate, "hvac_mode", "emergency_heat") = invalid, "unreported HVAC mode refused")
+    AssertTrue(HearthClimateAction(climate, "fan_mode", "turbo") = invalid, "unreported fan mode refused")
+    for each value in ["unsupported", 1, invalid]
+        AssertTrue(not HearthActionAllowed({domain: "climate", service: "set_hvac_mode", entityId: climate.entity_id, data: {hvac_mode: value}}, states, selected, {}), "forged unsupported HVAC mode refused")
+        AssertTrue(not HearthActionAllowed({domain: "climate", service: "set_fan_mode", entityId: climate.entity_id, data: {fan_mode: value}}, states, selected, {}), "forged unsupported fan mode refused")
+    end for
+    AssertTrue(not HearthActionAllowed({domain: "climate", service: "set_temperature", entityId: climate.entity_id, data: {}}, states, selected, {}), "selected climate does not authorize empty target payload")
+    AssertTrue(not HearthActionAllowed({domain: "climate", service: "turn_off", entityId: climate.entity_id}, states, selected, {}), "selected climate does not authorize power toggling")
+    action = HearthClimateAction(climate, "fan_mode", "low")
+    AssertTrue(action.service = "set_fan_mode" and HearthActionAllowed(action, states, selected, {}), "reported fan mode authorized with bit8")
+    AssertTrue(not HearthActionAllowed(action, states, unselected, {}), "fan mode requires Controls selection")
+    climate.attributes.fan_modes = ["low", 1]
+    AssertTrue(HearthClimateAction(climate, "fan_mode", "low") = invalid, "malformed fan capability array refused")
+    climate.attributes.fan_modes = ["auto", "low", "high"]
+    climate.attributes.supported_features = 1
+    AssertTrue(HearthClimateFields(climate).Count() = 2, "fan list alone does not expose fan control")
+    AssertTrue(not HearthActionAllowed(action, states, selected, {}), "fan list without bit8 cannot authorize write")
+    AssertTrue(HearthClimateAction(climate, "fan_mode", "low") = invalid, "fan builder requires bit8")
+    for each mode in ["auto", "dry", "fan_only"]
+        climate.state = mode
+        AssertTrue(HearthClimateFields(climate).Count() = 1, "non-manual HVAC mode has no temperature controls")
+        AssertTrue(HearthClimateAction(climate, "temperature", 21) = invalid, "non-manual HVAC mode rejects target write")
+    end for
+    for each mode in ["unavailable", "unknown", ""]
+        climate.state = mode
+        AssertTrue(HearthClimateFields(climate).Count() = 0, "unavailable climate exposes no controls")
+        AssertTrue(not HearthActionAllowed({domain: "climate", service: "set_hvac_mode", entityId: climate.entity_id, data: {hvac_mode: "heat"}}, states, selected, {}), "unavailable climate cannot change mode")
+    end for
+    climate.state = "heat"
+    for each features in ["9", -1, 1.5, true, invalid]
+        climate.attributes.supported_features = features
+        AssertTrue(HearthClimateFields(climate).Count() = 1, "malformed feature mask grants neither temperature nor fan capability")
+    end for
+    climate.attributes.supported_features = 1
+    for each value in [0, -0.5, "0.5", invalid]
+        climate.attributes.target_temp_step = value
+        AssertTrue(HearthClimateAction(climate, "temperature", 21) = invalid, "malformed reported step does not fall back")
+    end for
+    climate.attributes.Delete("target_temp_step")
+    AssertTrue(HearthClimateFields(climate)[0].step = 1, "absent step alone falls back to one")
+    climate.attributes.temperature = 70
+    climate.attributes.min_temp = 45
+    climate.attributes.max_temp = 90
+    climate.attributes.target_temp_step = 1
+    fields = HearthClimateFields(climate)
+    AssertTrue(fields[0].value = 70 and fields[0].step = 1, "Fahrenheit targets preserve integer unit values")
+    AssertTrue(HearthActionAllowed(HearthClimateAction(climate, "temperature", 71), states, selected, {}), "Fahrenheit integer target authorized without conversion")
+    climate.attributes.target_temp_step = 0.5
+    climate.attributes.min_temp = 45.2
+    AssertTrue(HearthClimateAction(climate, "temperature", 70.5) <> invalid, "reported minimum need not align target step grid")
+    climate.attributes.min_temp = "45"
+    AssertTrue(HearthClimateAction(climate, "temperature", 70.5) = invalid, "nonnumeric limit rejected")
+    climate.attributes.min_temp = 100
+    AssertTrue(HearthClimateAction(climate, "temperature", 70.5) = invalid, "reversed reported limits rejected")
+    climate.attributes.Delete("min_temp")
+    climate.attributes.Delete("max_temp")
+    fields = HearthClimateFields(climate)
+    AssertTrue(fields.Count() = 1 and fields[0].key = "hvac_mode", "absent limits leave mode choices but no invented temperature limits")
+    AssertTrue(HearthClimateAction(climate, "temperature", 71) = invalid, "numeric target stays read-only without reported limits")
+    climate.attributes.min_temp = 45
+    climate.attributes.max_temp = 90
+    climate.attributes.temperature = invalid
+    AssertTrue(HearthClimateAction(climate, "temperature", 71) = invalid, "missing target stays read-only despite current temperature")
+    climate.attributes.temperature = "70"
+    AssertTrue(HearthClimateAction(climate, "temperature", 71) = invalid, "string target is not coerced")
+    for each options in [["heat", 1], "heat", [], invalid]
+        climate.attributes.hvac_modes = options
+        AssertTrue(HearthClimateFields(climate).Count() = 0, "malformed HVAC capabilities do not create mode choices")
+    end for
+
+    climate.attributes = {supported_features: 3, temperature: 21, target_temp_low: 18, target_temp_high: 24, min_temp: 10, max_temp: 30, target_temp_step: 0.5}
+    climate.state = "heat_cool"
+    fields = HearthClimateFields(climate)
+    AssertTrue(fields.Count() = 2 and fields[0].key = "target_temp_low" and fields[1].key = "target_temp_high", "heat_cool prefers both range bounds")
+    action = HearthClimateAction(climate, "target_temp_low", 18.5)
+    AssertTrue(action.data.Count() = 2 and action.data.target_temp_low = 18.5 and action.data.target_temp_high = 24, "low edit includes unchanged high bound")
+    AssertTrue(HearthActionAllowed(action, states, selected, {}), "selected paired range write authorized")
+    action = HearthClimateAction(climate, "target_temp_high", 25)
+    AssertTrue(action.data.target_temp_low = 18 and action.data.target_temp_high = 25, "high edit includes unchanged low bound")
+    AssertTrue(HearthClimateAction(climate, "target_temp_low", 24) <> invalid, "equal range endpoints allowed")
+    AssertTrue(HearthClimateAction(climate, "target_temp_low", 24.5) = invalid, "low cannot exceed high")
+    AssertTrue(HearthClimateAction(climate, "target_temp_high", 17.5) = invalid, "high cannot fall below low")
+    for each data in [{target_temp_low: 25, target_temp_high: 24}, {target_temp_low: 9, target_temp_high: 24}, {target_temp_low: 18, target_temp_high: 31}, {target_temp_low: 18}, {target_temp_high: 24}, {target_temp_low: "18", target_temp_high: 24}, {target_temp_low: 18, target_temp_high: 24, temperature: 21}, {temperature: 21}]
+        action.data = data
+        AssertTrue(not HearthActionAllowed(action, states, selected, {}), "invalid, incomplete, reversed or wrong-shape range refused")
+    end for
+    climate.state = "heat"
+    AssertTrue(HearthClimateFields(climate)[0].key = "temperature", "heat prefers single target when both capabilities exist")
+    climate.attributes.supported_features = 2
+    AssertTrue(HearthClimateFields(climate).Count() = 2, "range-only capability retains both bounds")
+    climate.attributes.target_temp_low = 26
+    AssertTrue(HearthClimateFields(climate).Count() = 0, "reversed reported range stays read-only")
+    climate.attributes.target_temp_low = invalid
+    AssertTrue(HearthClimateFields(climate).Count() = 0, "missing range endpoint stays read-only")
+    AssertTrue(HearthClimateAction(invalid, "temperature", 21) = invalid, "missing climate state rejected")
+    AssertTrue(HearthClimateAction(climate, {}, 21) = invalid, "malformed field key rejected")
 end sub
 
 sub AssertTrue(condition as boolean, message as string)

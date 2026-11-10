@@ -131,7 +131,7 @@ sub UpdateCameraMetadata()
     for i = 0 to m.ids.Count() - 1
         tile = m.tiles[i]
         state = HearthStateById(m.top.states, m.ids[i])
-        tile.title.text = m.ids[i]
+        tile.title.text = HearthEntityTitle({entity_id: m.ids[i]}, m.top.config)
         tile.available = false
         tile.stateText = "Unavailable"
         if state <> invalid

@@ -10,10 +10,13 @@ Native BrightScript/SceneGraph. Direct Home Assistant connection. No browser wra
 
 ## Features
 
-- **Room-based dashboard:** display up to 30 selected sensors, statuses, and toggles, grouped by Home Assistant area.
-- **Device controls:** select up to 48 devices; toggle lights, switches, and input booleans, adjust supported light brightness, and activate scenes, scripts, and buttons.
+- **Combined Home dashboard:** view sensors, statuses, and device controls together by room. Home tiles and Controls selections are merged, with each device shown once.
+- **Device controls:** select up to 48 controllable devices alongside up to 30 Home tiles; toggle lights, switches, and input booleans, adjust supported light brightness, and activate scenes, scripts, and buttons.
+- **Climate controls:** adjust supported thermostat targets, heat/cool ranges, HVAC modes, and fan modes.
+- **Scene shortcuts:** run selected Home Assistant scenes and scripts with one press from a dedicated Scenes tab.
 - **Cameras:** select up to nine cameras, browse refreshed snapshots, and open supported HLS streams.
 - **Personalization:** dark, light, or automatic theme; three minimalist backgrounds; 12/24-hour clock; configurable refresh interval.
+- **Local device names:** rename selected devices, scenes, and cameras on your Roku without changing Home Assistant.
 - **Remote-first navigation:** visible focus, on-screen button hints, room filters, and saved device selections.
 
 Hearth is a native dashboard, not a Lovelace renderer. It does not transcode video or browse Frigate recordings.
@@ -57,28 +60,86 @@ The installable channel is `out/ha-roku.zip`. No configuration file is required 
 
 1. Create a long-lived access token in your Home Assistant user profile.
 2. Open Hearth's **Settings**, enter the Home Assistant address and token, and choose **Save connection**.
-3. Choose devices for **Home tiles**, **Controls**, and **Cameras**.
+3. Choose **Home tiles** for status information, **Controls** for device commands, **Scenes** for shortcuts, and **Cameras** for feeds. Home tiles and Controls appear together on **Home**.
 4. In a device picker, press **Right**, then **OK**, to save. **Back** discards unsaved changes.
 
-Saved settings persist on the Roku. Room names come from Home Assistant areas; unassigned devices appear under **Other**. Room and selected-only filters do not discard hidden selections.
+Saved settings, including the refresh interval, layout density, and alert limits, persist on the Roku. Room names come from Home Assistant areas; unassigned devices appear under **Other**. Room and selected-only filters do not discard hidden selections.
+
+On Home, sensors and binary sensors stack in the right-hand column; other devices stay in the left grid. Each side scrolls independently. Left/Right crosses between them, and Up/Down scrolls the focused side. Sensors are display-only: OK does nothing, and focus is retained for scrolling and Audio Guide readings. Rooms without sensors use the full-width grid.
+
+Home and Scenes use compact tiles with enlarged labels and action text. Sensor readouts stack against the right edge as solid, square-edged panels: light gray in dark mode and blue in light mode, with dark readings. Focus adds a contrasting outline and lighter fill without making sensors clickable. Interactive controls retain their rounded boxes and focus outline. Home scene, script, and button shortcuts show their action instead of a raw timestamp.
+
+Compact tiles include 10-pixel side padding and 6-pixel top/bottom padding at the 720p design resolution. Their 80-pixel height accommodates two-line names without crowding the reading or action.
+
+Settings shows contextual help for Home tiles, Controls, and Scenes. Duplicate device labels include their entity IDs, and focusing a device shows its full ID in the detail area.
+
+### Layout density
+
+In **Settings**, choose **Compact** for smaller tiles or **Comfortable** for larger labels and controls. The choice applies to Home and Scenes and is saved on the Roku. Sensor readings remain stacked on the right; both layouts retain remote navigation and scrolling.
+
+### Sensor alerts
+
+Sensor alerts are off by default. Enable them in **Settings** to highlight selected sensor readings without sending commands or running automations:
+
+- Battery readings at or below your percentage threshold.
+- Open doors and windows when opening alerts are enabled.
+- Temperatures below your minimum or above your maximum. Choose Celsius or Fahrenheit for the limits; reported readings are converted for comparison, not relabeled.
+
+Alerts include a text warning, not just a color. Missing, unavailable, or stale readings do not produce alerts. Limits apply across selected sensors; these visual alerts are not a replacement for Home Assistant safety automations or notifications.
 
 ## Using the remote
 
 | Context | Controls |
 | --- | --- |
 | Page tabs | Left/Right selects a page; OK or Down enters it. |
-| Home and Controls | Arrows navigate devices; Rewind/Fast-forward changes rooms. |
+| Home | Arrows navigate devices; Rewind/Fast-forward changes rooms. |
 | Device tile | OK toggles a supported device, opens its actions, or shows read-only details. |
-| Dimmable light | Play opens brightness adjustment. |
+| Supported light selected in Settings > Controls | Play opens light settings on Home: brightness, white temperature, and color presets supported by that device. |
+| Thermostat selected in Settings > Controls | OK opens climate settings on Home; select a setting, then a temperature adjustment or mode. |
+| Scenes | Arrows choose a shortcut; OK runs it immediately; Back returns to the tabs. |
 | Cameras | Arrows choose a camera; OK opens it; Back closes playback or snapshots. |
 | Navigation | Back returns to the tabs; from the tabs, Back returns Home, then exits. |
 | Settings | Star opens Settings. |
 | Refresh | Replay refreshes states and room assignments. |
-| Error banner | Play opens error details, taking priority over brightness. |
+| Error banner | Play opens error details, taking priority over light settings. |
 
 The bottom-right Home Assistant indicator shows a green check for a successful fresh state fetch and a red X for an unconfirmed or stale connection. Save failures are reported separately.
 
 Device actions are sent once, followed by a one-second wait and state refresh. Tiles display **Sending…** until completion, then show Home Assistant's reported state. Failed actions are not automatically retried; check the device's state before retrying.
+
+### Scene shortcuts
+
+Choose scenes and scripts in **Settings > Scenes**, then press **Right**, **OK** to save; **Back** cancels unsaved changes. The **Scenes** tab appears when at least one scene or script is selected and hides when the last is removed. Existing selections carry over. Shortcuts also appear on Home and share the 48-device Controls selection limit; saving Scenes preserves other selected controls.
+
+Press **OK** to activate a scene or run a script immediately—there is no confirmation dialog on this page. **Sending…** blocks repeat activation until the request and one-second refresh finish. Unavailable entities cannot run. A successful request means the command was sent, not that every action inside the scene or script has completed.
+
+### Light controls
+
+Select lights in **Settings > Controls** to enable their advanced settings. **OK** still toggles the light; **Play** opens its supported light controls. Unsupported settings are omitted. Commands apply immediately and refresh the reported state after one second; Back or Cancel sends nothing.
+
+- Brightness offers 10-percentage-point adjustments and 25/50/75/100% presets.
+- Color temperature offers bounded steps and presets within the light's reported range.
+- Color-capable lights offer Red, Green, Blue, and Amber presets.
+
+Each command is checked again against the current device capabilities and Controls selection before sending.
+
+### Climate controls
+
+Select thermostats in **Settings > Controls**, then press **Right**, **OK** to save. Open a thermostat with **OK** to see its current temperature and supported settings.
+
+- Temperature adjustments follow the reported step and limits; when no step is reported, Hearth uses one degree. Heat/cool range edits send both bounds and cannot cross them.
+- HVAC, fan, and preset menus offer only options reported by that device. **Off** appears only when supported.
+- Choosing an adjustment or mode sends it immediately, closes the menu, and refreshes the state after one second. **Back** or **Close** sends nothing.
+- Missing targets or limits remain read-only; some thermostats only report a target after leaving Off. Auto, Dry, and Fan-only modes do not offer target adjustments.
+- Temperatures use Home Assistant's reported units without conversion. If the unit label is absent, Hearth shows `°` rather than guessing Celsius or Fahrenheit.
+
+Thermostats selected only in **Settings > Home tiles** remain read-only. Select them in **Settings > Controls** to enable commands on the same Home tile. Combining the pages does not enable additional commands or discard existing selections.
+
+### Device names
+
+Open **Settings > Device names**, choose a selected device, and enter a name of up to 64 characters. **Save name** applies it across Home, Scenes, and Cameras and keeps it after restarting the app. Devices in multiple selections appear once in the editor.
+
+**Reset name**, or saving an empty name, restores the file-configured name when present, otherwise Home Assistant's friendly name or the entity ID. **Cancel** discards the edit. Names are stored only on this Roku; renaming does not change Home Assistant entities, selections, or commands.
 
 ## Configuration
 
@@ -94,7 +155,7 @@ Copy [config.example.json](config.example.json) to the ignored `config.json`, ed
 | `homeAssistant.url` | Reachable HTTP(S) base URL without embedded credentials, query parameters, or a fragment. |
 | `homeAssistant.token` | Home Assistant long-lived access token. |
 | `homeAssistant.entities` | Initial Home selections. Suggested sensors are used when this list is empty. |
-| `homeAssistant.entityNames` | Optional entity-ID-to-display-name map. |
+| `homeAssistant.entityNames` | Optional entity-ID-to-display-name map; saved on-device names take precedence. |
 | `homeAssistant.actions` | Explicit `{name, domain, service, entityId}` commands; these seed Controls selections. |
 | `refreshSeconds` | Initial refresh interval: 5–3600 seconds; default 30. |
 
@@ -106,6 +167,8 @@ Other service operations require an explicit configured action. For complex serv
 </details>
 
 ## Cameras and troubleshooting
+
+The **Cameras** tab appears when at least one camera is saved in **Settings > Cameras** and hides when the last camera is deselected. Offline cameras remain selected and do not hide the tab.
 
 Camera snapshots refresh every five seconds while visible. A failed refresh retains the last successful image and shows a failure status. Unsupported or failed live streams fall back to refreshed full-screen snapshots.
 
@@ -150,7 +213,7 @@ Source is organized into [SceneGraph components](components/), [shared BrightScr
 Desktop tests use native-boundary doubles; they do not prove SceneGraph layout, networking, Audio Guide output, or video playback. Test relevant changes on a physical Roku, including focus, scrolling, save/cancel, room changes, and camera fallback. Use only safe devices for control tests and restore their original state afterward.
 
 <details>
-<summary>Native WebSocket and hint-layout checks</summary>
+<summary>Native model, WebSocket, and hint-layout checks</summary>
 
 The WebSocket fixture requires Python 3 and uses synthetic credentials only. In one terminal, replace the placeholder with your computer's Roku-reachable IPv4 address:
 
@@ -174,7 +237,17 @@ For native hint layout:
 npx bsc --project bsconfig.hint-tests.json
 ```
 
-Sideload `out/hint-tests.zip` and look for `HEARTH_HINT_TESTS_PASSED` on port 8085. **Reinstall the production channel after either test package.**
+Sideload `out/hint-tests.zip` and look for `HEARTH_HINT_TESTS_PASSED` on port 8085.
+
+For model and climate authorization checks on Roku's actual numeric types:
+
+```sh
+npx bsc --project bsconfig.model-tests.json
+```
+
+Sideload `out/model-tests.zip` and require `HEARTH_MODEL_TESTS_PASSED` on port 8085. These checks send no Home Assistant commands.
+
+**Reinstall the production channel after any test package.**
 
 </details>
 
