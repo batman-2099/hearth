@@ -2,18 +2,16 @@ sub init()
     m.entries = []
     m.firstRow = 0
     m.tiles = []
-    m.room = ""
-    m.rooms = []
     canvas = m.top.createChild("Group")
     m.theme = HearthTheme("dark")
-    m.empty = HearthLabel(canvas, "Choose lights, thermostats, switches, scenes and buttons in Settings > Controls.", 0, 140, 1152, 100, m.theme.text, m.theme.bodySize)
+    m.empty = HearthLabel(canvas, "Choose scenes or scripts in Settings > Scenes, then press Right and OK to save.", 0, 140, 1152, 100, m.theme.text, m.theme.bodySize)
     m.empty.wrap = true
     m.range = HearthLabel(canvas, "", 832, 4, 320, 28, m.theme.muted, m.theme.smallSize)
     m.range.horizAlign = "right"
-    m.roomLabel = HearthLabel(canvas, "", 0, 0, 820, 38, m.theme.text, m.theme.headingSize)
+    m.roomLabel = HearthLabel(canvas, "Scenes", 0, 0, 820, 38, m.theme.text, m.theme.headingSize)
     m.roomLabel.font = m.theme.fontBold
     m.roomLabel.font.size = m.theme.headingSize
-    ' Recycle one screen within the current room.
+    ' ponytail: recycle one screen of scene shortcuts.
     for slot = 0 to 7
         node = canvas.createChild("Group")
         node.scale = [0.5, 0.5]
@@ -24,10 +22,7 @@ sub init()
         title.wrap = true
         title.maxLines = 2
         value = HearthLabel(node, "", 20, 104, 232, 44, m.theme.muted, m.theme.valueSize)
-        toggle = HearthToggle(node, 168, 110)
-        track = HearthRectangle(node, 20, 152, 232, 4, m.theme.rule)
-        fill = HearthRectangle(node, 20, 152, 0, 4, m.theme.text)
-        m.tiles.Push({node: node, border: border, body: body, title: title, value: value, toggle: toggle, track: track, fill: fill})
+        m.tiles.Push({node: node, border: border, body: body, title: title, value: value})
     end for
     m.top.observeField("focusedChild", "focusChanged")
 end sub
@@ -38,60 +33,22 @@ sub dataChanged()
     previousId = ""
     if m.top.selected >= 0 and m.top.selected < m.entries.Count() then previousId = m.entries[m.top.selected].id
     m.theme = HearthTheme(data.themeMode)
-    ids = data.preferences.controls
-    m.empty.text = "Choose lights, thermostats, switches, scenes and buttons in Settings > Controls."
-    if m.top.shortcutsOnly = true
-        ids = []
-        for each id in data.preferences.controls
-            if HearthContains(["scene", "script"], HearthEntityDomain(id)) then ids.Push(id)
-        end for
-        m.empty.text = "Choose scenes or scripts in Settings > Scenes, then press Right and OK to save."
-    end if
+    ids = []
+    for each id in data.preferences.controls
+        if HearthContains(["scene", "script"], HearthEntityDomain(id)) then ids.Push(id)
+    end for
     m.entries = []
-    groups = {}
-    rooms = []
     for each id in ids
-        room = "Other"
-        if data.areas <> invalid
-            if HearthIsString(data.areas[id])
-                if data.areas[id].Trim() <> "" then room = data.areas[id].Trim()
-            end if
-        end if
-        if m.top.shortcutsOnly = true then room = "Scenes"
-        if not groups.DoesExist(room)
-            groups[room] = []
-            if LCase(room) <> "other" then rooms.Push(room)
-        end if
         state = HearthStateById(data.states, id)
         if state = invalid then state = {entity_id: id, state: "unavailable", attributes: {}}
-        actions = HearthControlActions(id, data.states, data.preferences, data.config)
-        action = "No actions available"
-        if actions.Count() = 1 then action = "[OK] " + actions[0].name
-        if actions.Count() > 1 then action = "[OK] Choose action"
-        if HearthEntityDomain(id) = "climate" then action = "[OK] Climate controls"
-        if m.top.shortcutsOnly = true then action = "[OK] " + HearthStandardAction(id).name
-        groups[room].Push({id: id, state: state, room: room, title: HearthEntityTitle(state, data.config), action: action})
+        action = "[OK] " + HearthStandardAction(id).name
+        m.entries.Push({id: id, state: state, title: HearthEntityTitle(state, data.config), action: action})
     end for
-    rooms.Sort("i")
-    if groups.DoesExist("Other") then rooms.Push("Other")
-    m.rooms = rooms
-    m.groups = groups
-    if not HearthContains(m.rooms, m.room)
-        m.room = ""
-        if m.rooms.Count() > 0 then m.room = m.rooms[0]
-    end if
-    controlsRoomChanged(previousId)
-end sub
-
-sub controlsRoomChanged(previousId as string)
-    m.entries = []
-    if m.room <> "" then m.entries = m.groups[m.room]
+    HearthDisambiguateTitles(m.entries, ids, data.areas)
     selected = 0
     for index = 0 to m.entries.Count() - 1
         if m.entries[index].id = previousId then selected = index
     end for
-    if selected >= m.entries.Count() then selected = m.entries.Count() - 1
-    if selected < 0 then selected = 0
     m.top.selected = selected
     render()
 end sub
@@ -103,9 +60,6 @@ sub render()
     m.empty.color = m.theme.text
     m.range.visible = count > 8
     m.range.color = m.theme.muted
-    m.roomLabel.text = m.room
-    if m.top.shortcutsOnly = true then m.roomLabel.text = "Scenes"
-    m.top.currentRoom = m.room
     m.roomLabel.color = m.theme.text
     row = Int(m.top.selected / 4)
     if row < m.firstRow then m.firstRow = row
@@ -134,42 +88,18 @@ sub render()
             tile.title.text = entry.title
             tile.title.color = m.theme.text
             tile.body.blendColor = m.theme.surface
-            value = HearthTileValue(entry.state)
-            domain = HearthEntityDomain(entry.id)
-            if domain = "scene" then value = "Activate"
-            if domain = "script" then value = "Run"
-            if domain = "button" then value = "Press"
+            value = "Activate"
+            if HearthEntityDomain(entry.id) = "script" then value = "Run"
             if not HearthStateAvailable(entry.state) then value = "Unavailable"
             if pending then value = "Sending…"
             tile.value.text = value
             tile.value.color = m.theme.text
-            tile.value.width = 232
-            tile.toggle.node.visible = false
-            if HearthIsToggle(entry.id) and not pending
-                HearthToggleState(tile.toggle, HearthText(entry.state.state))
-                if tile.toggle.node.visible then tile.value.width = 140
-            end if
-            tile.track.visible = false
-            tile.fill.visible = false
-            if HearthLightSupportsBrightness(entry.state) and HearthStateAvailable(entry.state) and not pending
-                brightness = HearthAttributes(entry.state).brightness
-                if HearthIsNumber(brightness)
-                    percent = Int(brightness * 100 / 255 + 0.5)
-                    tile.value.text = value + " " + percent.ToStr().Trim() + "%"
-                    tile.track.visible = true
-                    tile.track.color = m.theme.rule
-                    tile.fill.visible = percent > 0
-                    tile.fill.color = m.theme.text
-                    tile.fill.width = 232 * percent / 100
-                end if
-            end if
             tile.value.font = m.theme.fontBold
             tile.value.font.size = m.theme.valueSize
             if Len(tile.value.text) > 12 then tile.value.font.size = m.theme.compactTextSize
             tile.value.height = 44
-            spokenValue = tile.value.text
-            if pending or domain = "scene" or domain = "script" or domain = "button" then spokenValue = HearthTileValue(entry.state)
-            tile.border.audioGuideText = entry.title + ", " + entry.room + ", " + spokenValue + ". " + controlHint(entry)
+            spokenValue = HearthTileValue(entry.state)
+            tile.border.audioGuideText = entry.title + ", Scenes, " + spokenValue + ". " + controlHint(entry)
         end if
     end for
     focusChanged()
@@ -178,9 +108,7 @@ end sub
 function controlHint(entry as object) as string
     if entry.id = m.top.pendingId then return "Sending…"
     if not HearthStateAvailable(entry.state) then return "Device unavailable"
-    hint = entry.action
-    if HearthLightSupportsBrightness(entry.state) then hint = hint + "     [Play] Light controls"
-    return hint
+    return entry.action
 end function
 
 sub focusChanged()
@@ -197,7 +125,6 @@ sub focusChanged()
     hint = ""
     if m.entries.Count() > 0 then hint = controlHint(m.entries[m.top.selected]) + "     "
     m.top.hint = hint + "[Back] Pages     [*] Settings"
-    if m.rooms.Count() > 1 then m.top.hint = m.top.hint + "     [Rew/Fwd] Rooms"
 end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
@@ -215,23 +142,6 @@ function onKeyEvent(key as string, press as boolean) as boolean
     current = m.entries[index]
     if key = "OK"
         if current.id <> m.top.pendingId then m.top.activate = current.id
-        return true
-    end if
-    if key = "play"
-        if current.id = m.top.pendingId or not HearthLightSupportsBrightness(current.state) or not HearthStateAvailable(current.state) then return false
-        m.top.brightness = current.id
-        return true
-    end if
-    if key = "rewind" or key = "fastforward"
-        roomIndex = 0
-        for position = 0 to m.rooms.Count() - 1
-            if m.rooms[position] = m.room then roomIndex = position
-        end for
-        if key = "rewind" then roomIndex = roomIndex - 1 else roomIndex = roomIndex + 1
-        roomIndex = (roomIndex + m.rooms.Count()) mod m.rooms.Count()
-        m.room = m.rooms[roomIndex]
-        m.firstRow = 0
-        controlsRoomChanged("")
         return true
     end if
     if key <> "up" and key <> "down" and key <> "left" and key <> "right" then return false

@@ -8,81 +8,17 @@ sub Main()
     end function)
     m.entries = []
     m.firstRow = 0
-    m.room = ""
-    m.rooms = []
     m.empty = {}
     m.range = {}
     m.roomLabel = {}
     m.tiles = []
     for slot = 0 to 7
-        m.tiles.Push({node: {}, border: {focused: false, hasFocus: ControlsTestHasFocus, setFocus: ControlsTestSetFocus}, body: {}, title: {}, value: {}, toggle: {node: {}, track: {}, thumb: {}}, track: {}, fill: {}})
+        m.tiles.Push({node: {}, border: {focused: false, hasFocus: ControlsTestHasFocus, setFocus: ControlsTestSetFocus}, body: {}, title: {}, value: {}})
     end for
-    m.top = {selected: 0, pendingId: "", focused: false, IsInFocusChain: ControlsTestHasFocus, data: {themeMode: "dark", config: {}, preferences: {controls: ["light.first", "switch.second"]}, areas: {}, states: [{entity_id: "light.first", state: "off", attributes: {}}, {entity_id: "switch.second", state: "on", attributes: {}}]}}
-    for each room in ["other", "OTHER", "Other"]
-        m.top.data.areas = {"light.first": room}
-        dataChanged()
-        CheckControls(m.entries.Count() = 2 and m.entries[0].id = "light.first" and m.entries[1].id = "switch.second", "reserved room variants never duplicate controls")
-        m.top.data.areas["switch.second"] = room
-        dataChanged()
-        CheckControls(m.entries.Count() = 2, "named Other room works without an unassigned device")
-    end for
-    m.top.selected = 1
-    m.top.data.areas = {"light.first": "Zebra", "switch.second": "Attic"}
-    dataChanged()
-    CheckControls(m.top.selected = 0 and m.entries[0].id = "switch.second", "room reordering preserves focused device identity")
-    CheckControls(m.room = "Attic" and m.entries.Count() = 1, "Controls filters entries to the active room")
-    onKeyEvent("fastforward", true)
-    CheckControls(m.room = "Zebra" and m.entries[0].id = "light.first" and m.top.dim = invalid, "room switching never sends brightness commands")
-    onKeyEvent("OK", true)
-    CheckControls(m.top.activate = "light.first", "room-local selection activates the correct entity")
-    dataChanged()
-    CheckControls(m.room = "Zebra" and m.entries[0].id = "light.first", "refresh preserves room and selection")
-    m.top.data.states[0].attributes = {supported_color_modes: ["brightness"], brightness: 128}
-    dataChanged()
-    handled = onKeyEvent("play", true)
-    CheckControls(handled and m.top.brightness = "light.first" and m.top.dim = invalid, "Play handles an available dimmable light without changing the device")
-    CheckControls(m.tiles[0].track.visible and m.tiles[0].fill.visible and Instr(1, m.tiles[0].value.text, "50%") > 0, "brightness is rendered on the active tile")
-    m.top.brightness = invalid
-    m.top.pendingId = "light.first"
-    render()
-    handled = onKeyEvent("play", true)
-    CheckControls(not handled and m.top.brightness = invalid, "pending device leaves Play unhandled")
-    CheckControls(m.tiles[0].value.text = "Sending…" and not m.tiles[0].track.visible and not m.tiles[0].toggle.node.visible, "pending state replaces brightness and toggle feedback")
-    m.top.activate = invalid
-    onKeyEvent("OK", true)
-    CheckControls(m.top.activate = invalid and Instr(1, m.top.hint, "Sending") > 0, "pending tile blocks duplicate activation and announces progress")
-    m.top.pendingId = ""
-    m.top.data.states[0].state = "unavailable"
-    dataChanged()
-    handled = onKeyEvent("play", true)
-    CheckControls(not handled and m.top.brightness = invalid and not m.tiles[0].track.visible, "unavailable light leaves Play unhandled and hides brightness")
-    m.top.data.states[0].state = "on"
-    dataChanged()
-    CheckControls(m.tiles[0].track.visible and m.tiles[0].toggle.node.visible, "completion restores brightness and toggle feedback")
-    onKeyEvent("OK", true)
-    CheckControls(m.top.activate = "light.first", "completed device accepts activation again")
-    onKeyEvent("fastforward", true)
-    CheckControls(m.room = "Attic", "next room wraps")
-    CheckControls(not onKeyEvent("play", true) and m.top.brightness = invalid, "nondimmable control leaves Play unhandled")
-    onKeyEvent("rewind", true)
-    CheckControls(m.room = "Zebra", "previous room wraps")
-    m.top.data.preferences.controls = ["switch.second"]
-    dataChanged()
-    CheckControls(m.room = "Attic" and m.entries.Count() = 1, "removed room falls back to a remaining room")
-    m.top.data.preferences.controls = []
-    dataChanged()
-    onKeyEvent("fastforward", true)
-    CheckControls(m.room = "" and m.entries.Count() = 0, "empty Controls has no stale room")
-    CheckControls(m.empty.visible and not m.tiles[0].node.visible and not onKeyEvent("play", true), "empty Controls clears tiles and leaves Play unhandled")
-    m.top.data.preferences.controls = ["climate.test"]
-    m.top.data.states = [{entity_id: "climate.test", state: "heat", attributes: {current_temperature: 21, temperature_unit: "°C"}}]
-    dataChanged()
-    CheckControls(Instr(1, m.tiles[0].value.text, "21") > 0 and not m.tiles[0].toggle.node.visible, "thermostat shows its reading without a misleading power toggle")
-    CheckControls(not onKeyEvent("play", true), "thermostat leaves Play available for error details")
-    onKeyEvent("OK", true)
-    CheckControls(m.top.activate = "climate.test", "thermostat OK opens controls through normal activation")
+    m.top = {selected: 0, pendingId: "", focused: false, IsInFocusChain: ControlsTestHasFocus, data: {themeMode: "dark", config: {}, preferences: {controls: []}, areas: {}, states: []}}
     TestControlsViewport()
     TestShortcutTiles()
+    TestDuplicateShortcutNames()
     m.top.data.preferences.controls = ["scene.test", "script.test"]
     dataChanged()
     previousId = m.entries[m.top.selected].id
@@ -98,13 +34,11 @@ sub Main()
 end sub
 
 sub TestShortcutTiles()
-    m.top.shortcutsOnly = true
     m.top.data.preferences.controls = ["light.test", "scene.test", "script.test"]
     m.top.data.states = [{entity_id: "scene.test", state: "unknown", attributes: {}}, {entity_id: "script.test", state: "off", attributes: {}}, {entity_id: "scene.unselected", state: "unknown", attributes: {}}]
     m.top.data.areas = {"scene.test": "Kitchen", "script.test": "Bedroom"}
     dataChanged()
     CheckControls(m.entries.Count() = 2 and m.entries[0].id = "scene.test" and m.entries[1].id = "script.test", "shortcuts include only selected scenes and scripts across rooms")
-    CheckControls(m.rooms.Count() = 1 and not m.tiles[0].toggle.node.visible, "shortcuts share one page without room filtering or toggle imagery")
     m.top.selected = 1
     m.top.data.preferences.controls = ["script.test", "scene.test"]
     dataChanged()
@@ -120,12 +54,26 @@ sub TestShortcutTiles()
     CheckControls(m.empty.visible and not m.tiles[0].node.visible, "empty shortcuts offer setup without leaking other controls")
 end sub
 
+sub TestDuplicateShortcutNames()
+    m.top.data.preferences.controls = ["scene.evening", "script.evening"]
+    m.top.data.states = [{entity_id: "scene.evening", state: "unknown", attributes: {friendly_name: "Evening"}}, {entity_id: "script.evening", state: "off", attributes: {friendly_name: "Evening"}}]
+    for each areas in [{"scene.evening": "Kitchen", "script.evening": "Bedroom"}, {"scene.evening": "Kitchen", "script.evening": "Kitchen"}, {}]
+        m.top.data.areas = areas
+        dataChanged()
+        CheckControls(m.tiles[0].title.text <> m.tiles[1].title.text, "duplicate shortcuts have distinct visible names")
+        CheckControls(m.tiles[0].border.audioGuideText <> m.tiles[1].border.audioGuideText, "duplicate shortcuts have distinct spoken names")
+        m.top.selected = 1
+        onKeyEvent("OK", true)
+        CheckControls(m.top.activate = "script.evening", "disambiguation preserves the selected command target")
+    end for
+end sub
+
 sub TestControlsViewport()
     m.top.data.preferences.controls = []
     m.top.data.states = []
     m.top.data.areas = {}
     for index = 0 to 10
-        id = "light.viewport_" + index.ToStr().Trim()
+        id = "scene.viewport_" + index.ToStr().Trim()
         title = "Device " + index.ToStr().Trim()
         m.top.data.preferences.controls.Push(id)
         m.top.data.states.Push({entity_id: id, state: "on", attributes: {friendly_name: title}})
@@ -140,7 +88,7 @@ sub TestControlsViewport()
     CheckControls(m.tiles[4].node.visible and m.tiles[4].title.text = "Device 8" and m.tiles[4].border.hasFocus(), "selected third-row device is rendered and focused in the viewport")
     CheckControls(m.tiles[6].title.text = "Device 10" and not m.tiles[7].node.visible, "partial last row hides the unused recycled tile")
     onKeyEvent("OK", true)
-    CheckControls(m.top.activate = "light.viewport_8", "scrolled activation targets the selected entity")
+    CheckControls(m.top.activate = "scene.viewport_8", "scrolled activation targets the selected entity")
     onKeyEvent("up", true)
     onKeyEvent("up", true)
     CheckControls(m.tiles[0].title.text = "Device 0" and m.tiles[0].border.blendColor = m.theme.focus, "scrolling back restores the first selected device")

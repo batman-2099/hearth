@@ -9,6 +9,7 @@
   "scripts": {
     "check": "bsc --project bsconfig.json --create-package false --copy-to-staging false",
     "build": "bsc --project bsconfig.json",
+    "build:local": "bsc --project bsconfig.local.json",
     "test": "node scripts/test.cjs"
   },
   "devDependencies": {

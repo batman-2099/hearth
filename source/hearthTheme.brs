@@ -4,7 +4,7 @@ function HearthTheme(mode as string) as object
         text: "0xF4F3EFFF", muted: "0xBEC3C8FF", focus: "0xFFFFFFFF"
         active: "0xF2C66DFF", activeText: "0x242014FF", rule: "0x343A40FF", error: "0xFFB2A8FF"
         success: "0x75D99BFF"
-        sensorSurface: "0xBEC3C8FF", sensorText: "0x22272BFF", sensorFocus: "0xF4F3EFFF", sensorValueSize: 48
+        sensorSurface: "0xBEC3C8FF", sensorText: "0x22272BFF", sensorFocus: "0xF4F3EFFF"
         fontBody: "font:MediumSystemFont", fontBold: "font:MediumBoldSystemFont"
         smallSize: 22, bodySize: 26, headingSize: 32, valueSize: 40, compactTextSize: 36
     }

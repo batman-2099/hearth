@@ -113,6 +113,8 @@ Choose scenes and scripts in **Settings > Scenes**, then press **Right**, **OK**
 
 Press **OK** to activate a scene or run a script immediately—there is no confirmation dialog on this page. **Sending…** blocks repeat activation until the request and one-second refresh finish. Unavailable entities cannot run. A successful request means the command was sent, not that every action inside the scene or script has completed.
 
+Duplicate shortcut names include their Home Assistant room, with the entity ID as a fallback when needed. The same disambiguated names are used for Audio Guide descriptions.
+
 ### Light controls
 
 Select lights in **Settings > Controls** to enable their advanced settings. **OK** still toggles the light; **Play** opens its supported light controls. Unsupported settings are omitted. Commands apply immediately and refresh the reported state after one second; Back or Cancel sends nothing.
@@ -148,7 +150,7 @@ The on-device Settings screen is the recommended setup method. Selecting a devic
 <details>
 <summary>Optional file-based setup and custom actions</summary>
 
-Copy [config.example.json](config.example.json) to the ignored `config.json`, edit it locally, then rebuild and install. A saved on-device connection takes precedence over bundled credentials.
+Copy [config.example.json](config.example.json) to the ignored `config.json`, edit it locally, then run `npm run build:local` and install `out/ha-roku-local.zip`. A saved on-device connection takes precedence over bundled credentials. The standard `npm run build` excludes this file.
 
 | Field | Purpose |
 | --- | --- |
@@ -162,7 +164,7 @@ Copy [config.example.json](config.example.json) to the ignored `config.json`, ed
 Other service operations require an explicit configured action. For complex service payloads, create a Home Assistant script and select it in Hearth. Lights, switches, and input booleans retain their direct toggle behavior.
 
 > [!WARNING]
-> Builds include `config.json` when present. Do not share that file or a channel ZIP containing real credentials.
+> Local builds include `config.json` when present. Never share `config.json` or `out/ha-roku-local.zip` containing real credentials. Use `npm run build` for a distributable channel.
 
 </details>
 
@@ -188,7 +190,7 @@ HLS URLs must stay on the configured Home Assistant origin. Snapshots use Home A
 - Keep tokens, passwords, camera URLs containing credentials, and private camera images out of issues, commits, and release assets.
 - Publish source and `config.example.json`, not your whole working folder. `.gitignore` excludes local configuration, `.env` files, `out/`, `.hallmark/`, private keys, and `node_modules/`.
 - Ignore rules do not protect force-added files, manual uploads, or existing Git history.
-- Build public channel releases from a clean checkout **without `config.json`**, then configure credentials on-device.
+- Build public channel releases with `npm run build`; this excludes `config.json` even when it exists locally. Configure credentials on-device. Do not publish the explicit local-build ZIP.
 - Roku registry storage is local persistence, not a secret vault. Use a Home Assistant account with only the permissions you need.
 - Revoke and replace exposed credentials. Deleting them from a file or commit does not invalidate them.
 
@@ -206,9 +208,10 @@ gitleaks git . --redact
 | `npm ci` | Install the locked development dependencies. |
 | `npm test` | Run seven desktop regression suites. |
 | `npm run check` | Check compiler diagnostics without packaging. |
-| `npm run build` | Build `out/ha-roku.zip`. |
+| `npm run build` | Build `out/ha-roku.zip` without local configuration. |
+| `npm run build:local` | Build private `out/ha-roku-local.zip`, including `config.json` when present. |
 
-Source is organized into [SceneGraph components](components/), [shared BrightScript code](source/), [tests and fixtures](scripts/), and [image assets](images/). Packaging is configured in [bsconfig.json](bsconfig.json).
+Source is organized into [SceneGraph components](components/), [shared BrightScript code](source/), [tests and fixtures](scripts/), and [image assets](images/). Public packaging is configured in [bsconfig.json](bsconfig.json); [bsconfig.local.json](bsconfig.local.json) explicitly opts into bundling local configuration.
 
 Desktop tests use native-boundary doubles; they do not prove SceneGraph layout, networking, Audio Guide output, or video playback. Test relevant changes on a physical Roku, including focus, scrolling, save/cancel, room changes, and camera fallback. Use only safe devices for control tests and restore their original state afterward.
 

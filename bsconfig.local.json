@@ -1,0 +1,14 @@
+{
+  "extends": "./bsconfig.json",
+  "files": [
+    "manifest",
+    "LICENSE.hearth",
+    "source/**/*.brs",
+    "components/**/*.xml",
+    "components/**/*.brs",
+    "images/**/*",
+    "config.json"
+  ],
+  "outFile": "out/ha-roku-local.zip",
+  "stagingDir": "out/local-staging"
+}
